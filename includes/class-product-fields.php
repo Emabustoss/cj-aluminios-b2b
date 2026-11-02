@@ -35,6 +35,11 @@ class CJB2B_Product_Fields {
 		add_action( 'save_post_product', array( $this, 'manejar_guardado_producto' ), 10, 2 );
 		add_action( 'woocommerce_product_import_inserted_product_object', array( $this, 'manejar_producto_importado' ) );
 
+		add_action( 'woocommerce_product_meta_end', array( $this, 'mostrar_codigo_matriz_frontend' ) );
+		add_filter( 'posts_join', array( $this, 'busqueda_codigo_matriz_join' ), 10, 2 );
+		add_filter( 'posts_search', array( $this, 'busqueda_codigo_matriz_where' ), 10, 2 );
+		add_filter( 'posts_distinct', array( $this, 'busqueda_codigo_matriz_distinct' ), 10, 2 );
+
 		if ( defined( 'WP_CLI' ) && WP_CLI && class_exists( 'WP_CLI' ) ) {
 			WP_CLI::add_command( 'cjb2b convertir-perfiles', array( $this, 'comando_convertir_perfiles' ) );
 		}
@@ -199,6 +204,82 @@ class CJB2B_Product_Fields {
 
 	public static function codigo_matriz( int $product_id ): string {
 		return (string) get_post_meta( $product_id, self::META_CODIGO_MATRIZ, true );
+	}
+
+	/**
+	 * Muestra el código de matriz en la ficha del producto, junto a SKU y
+	 * categorías (donde WooCommerce ya muestra esos datos por defecto).
+	 */
+	public function mostrar_codigo_matriz_frontend(): void {
+		global $product;
+
+		if ( ! $product instanceof WC_Product ) {
+			return;
+		}
+
+		$codigo = self::codigo_matriz( $product->get_id() );
+
+		if ( '' === $codigo ) {
+			return;
+		}
+
+		echo '<span class="cjb2b-codigo-matriz">'
+			. esc_html__( 'Código de matriz:', 'cj-aluminios-b2b' ) . ' '
+			. '<strong>' . esc_html( $codigo ) . '</strong>'
+			. '</span>';
+	}
+
+	/**
+	 * Las tres funciones siguientes extienden la búsqueda de productos
+	 * (tienda y listado del admin) para que además de título/contenido
+	 * también matchee contra el código de matriz, ej. buscar "203".
+	 */
+	private function es_busqueda_de_productos( WP_Query $query ): bool {
+		if ( ! $query->is_search() || ! $query->is_main_query() ) {
+			return false;
+		}
+
+		$tipo = $query->get( 'post_type' );
+
+		return 'product' === $tipo || ( is_array( $tipo ) && in_array( 'product', $tipo, true ) );
+	}
+
+	public function busqueda_codigo_matriz_join( string $join, WP_Query $query ): string {
+		global $wpdb;
+
+		if ( ! $this->es_busqueda_de_productos( $query ) || str_contains( $join, "{$wpdb->postmeta}" ) ) {
+			return $join;
+		}
+
+		return $join . $wpdb->prepare(
+			" LEFT JOIN {$wpdb->postmeta} ON ( {$wpdb->posts}.ID = {$wpdb->postmeta}.post_id AND {$wpdb->postmeta}.meta_key = %s )",
+			self::META_CODIGO_MATRIZ
+		);
+	}
+
+	public function busqueda_codigo_matriz_where( string $where, WP_Query $query ): string {
+		global $wpdb;
+
+		$termino = trim( (string) $query->get( 's' ) );
+
+		if ( ! $this->es_busqueda_de_productos( $query ) || '' === $termino ) {
+			return $where;
+		}
+
+		$like        = '%' . $wpdb->esc_like( $termino ) . '%';
+		$condicion   = $wpdb->prepare( "( {$wpdb->postmeta}.meta_value LIKE %s )", $like );
+		$nueva_where = preg_replace(
+			'/\(\s*' . preg_quote( $wpdb->posts, '/' ) . '\.post_title\s+LIKE/',
+			"( {$condicion} OR {$wpdb->posts}.post_title LIKE",
+			$where,
+			1
+		);
+
+		return null !== $nueva_where ? $nueva_where : $where;
+	}
+
+	public function busqueda_codigo_matriz_distinct( string $distinct, WP_Query $query ): string {
+		return $this->es_busqueda_de_productos( $query ) ? 'DISTINCT' : $distinct;
 	}
 
 	/**
