@@ -121,9 +121,13 @@ class CJB2B_Pricing_Engine {
 			return;
 		}
 
-		$base = $this->calcular_precio_base( $variacion );
+		// null (sin peso o sin precio por kilo cargado para este acabado) se
+		// sincroniza como 0.00, no se deja intacto: si no se resetea, un
+		// precio por kilo que se puso en prueba y después se volvió a 0
+		// deja el precio "pegado" en el valor viejo para siempre.
+		$base = $this->calcular_precio_base( $variacion ) ?? 0.0;
 
-		if ( null === $base ) {
+		if ( abs( (float) $variacion->get_regular_price() - $base ) < 0.001 ) {
 			return;
 		}
 
