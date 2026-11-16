@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <defs>
+    <linearGradient id="pared" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f1ede6"/><stop offset="1" stop-color="#ddd6cb"/>
+    </linearGradient>
+    <linearGradient id="piso" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b08a62"/><stop offset="1" stop-color="#8d6a47"/>
+    </linearGradient>
+    <linearGradient id="cielo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fc0e6"/><stop offset="1" stop-color="#dbeaf3"/>
+    </linearGradient>
+    <linearGradient id="sofa" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7c8288"/><stop offset="1" stop-color="#5d6268"/>
+    </linearGradient>
+    <radialGradient id="luz" cx="0.5" cy="0.2" r="0.7">
+      <stop offset="0" stop-color="#fff6d8" stop-opacity="0.75"/><stop offset="1" stop-color="#fff6d8" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="620" fill="url(#pared)"/>
+  <rect y="0" width="1200" height="26" fill="#f8f6f2"/>
+  <rect y="26" width="1200" height="4" fill="#cfc8bc"/>
+
+  <!-- Vano con vista al exterior -->
+  <clipPath id="vano"><rect x="402" y="118" width="396" height="287"/></clipPath>
+  <g clip-path="url(#vano)">
+    <rect x="402" y="118" width="396" height="287" fill="url(#cielo)"/>
+    <ellipse cx="470" cy="340" rx="90" ry="70" fill="#5f8f55"/>
+    <ellipse cx="610" cy="360" rx="120" ry="80" fill="#4f7d48"/>
+    <ellipse cx="750" cy="345" rx="80" ry="72" fill="#699a5c"/>
+    <ellipse cx="520" cy="170" rx="60" ry="16" fill="#ffffff" opacity="0.8"/>
+    <ellipse cx="700" cy="205" rx="46" ry="12" fill="#ffffff" opacity="0.7"/>
+  </g>
+  <path d="M402 118h396v287H402z" fill="none" stroke="#bdb5a8" stroke-width="6"/>
+  <rect x="402" y="118" width="396" height="10" fill="#000" opacity="0.14"/>
+  <rect x="402" y="118" width="8" height="287" fill="#000" opacity="0.10"/>
+
+  <!-- Piso -->
+  <rect y="620" width="1200" height="180" fill="url(#piso)"/>
+  <g stroke="#7a5a3b" stroke-width="2" opacity="0.5">
+    <path d="M0 660h1200M0 705h1200M0 752h1200"/>
+    <path d="M140 620v40M420 620v40M760 620v40M1010 620v40M260 660v45M600 660v45M900 660v45M90 705v47M480 705v47M820 705v47M1100 705v47M300 752v48M700 752v48"/>
+  </g>
+  <rect y="606" width="1200" height="14" fill="#f6f3ee"/>
+  <rect y="618" width="1200" height="3" fill="#000" opacity="0.18"/>
+
+  <!-- Cuadro -->
+  <rect x="930" y="190" width="170" height="130" fill="#2f3033"/>
+  <rect x="942" y="202" width="146" height="106" fill="#e9e2d2"/>
+  <path d="M942 308l40-56 30 30 26-22 50 48z" fill="#b9a07a"/>
+  <circle cx="1052" cy="232" r="13" fill="#d98f52"/>
+
+  <!-- Planta -->
+  <path d="M150 610c-8-90-52-140-70-190 46 30 70 84 78 150 2-110 14-190 44-250 6 84-10 170-22 250 24-70 56-120 96-150-20 62-64 120-90 190z" fill="#4e7f4a"/>
+  <path d="M112 600h92l-12 76h-68z" fill="#c9c2b6"/>
+  <rect x="108" y="592" width="100" height="14" rx="4" fill="#b7afa2"/>
+
+  <!-- Lámpara de pie -->
+  <ellipse cx="1040" cy="520" rx="150" ry="170" fill="url(#luz)"/>
+  <rect x="1036" y="430" width="6" height="240" fill="#2b2c2f"/>
+  <ellipse cx="1039" cy="672" rx="38" ry="8" fill="#2b2c2f"/>
+  <path d="M996 432l18-70h50l18 70z" fill="#f2e6c4"/>
+
+  <!-- Alfombra -->
+  <ellipse cx="600" cy="716" rx="430" ry="56" fill="#d9d2c5"/>
+  <ellipse cx="600" cy="716" rx="400" ry="48" fill="none" stroke="#bfb6a6" stroke-width="3"/>
+
+  <!-- Sofá -->
+  <ellipse cx="600" cy="676" rx="340" ry="16" fill="#000" opacity="0.22"/>
+  <rect x="300" y="478" width="600" height="120" rx="22" fill="url(#sofa)"/>
+  <rect x="276" y="520" width="70" height="140" rx="20" fill="#676c72"/>
+  <rect x="854" y="520" width="70" height="140" rx="20" fill="#676c72"/>
+  <rect x="330" y="566" width="540" height="90" rx="16" fill="#878d93"/>
+  <path d="M600 566v90" stroke="#6b7076" stroke-width="3"/>
+  <rect x="372" y="508" width="104" height="78" rx="14" fill="#c7b28e"/>
+  <rect x="724" y="508" width="104" height="78" rx="14" fill="#3f4a55"/>
+  <rect x="320" y="656" width="14" height="22" fill="#3a2c20"/>
+  <rect x="866" y="656" width="14" height="22" fill="#3a2c20"/>
+</svg>

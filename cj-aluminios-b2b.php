@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CJ Aluminios B2B
  * Description: Portal B2B para CJ Aluminios: roles mayoristas, listas de precios y motor de precios dinámico por peso y acabado para perfiles de aluminio.
- * Version: 1.0.0
+ * Version: 1.2.0
  * Author: CJ Aluminios
  * Text Domain: cj-aluminios-b2b
  * Requires Plugins: woocommerce
@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'CJB2B_VERSION', '1.0.0' );
+define( 'CJB2B_VERSION', '1.2.0' );
 define( 'CJB2B_PATH', plugin_dir_path( __FILE__ ) );
 define( 'CJB2B_URL', plugin_dir_url( __FILE__ ) );
 
@@ -37,6 +37,17 @@ final class CJ_Aluminios_B2B {
 		require_once CJB2B_PATH . 'includes/class-b2b-roles.php';
 		require_once CJB2B_PATH . 'includes/class-product-fields.php';
 		require_once CJB2B_PATH . 'includes/class-pricing-engine.php';
+
+		// Fase 2: catálogo técnico, desglose de precios y pedido por WhatsApp.
+		require_once CJB2B_PATH . 'includes/class-frontend.php';
+		require_once CJB2B_PATH . 'includes/class-catalog-ui.php';
+		require_once CJB2B_PATH . 'includes/class-price-breakdown.php';
+		require_once CJB2B_PATH . 'includes/class-whatsapp-checkout.php';
+
+		// Fase 3: tratamientos, simulador 2D, portada y alta de gremio.
+		require_once CJB2B_PATH . 'includes/class-tratamientos-catalog.php';
+		require_once CJB2B_PATH . 'includes/class-simulador-2d.php';
+		require_once CJB2B_PATH . 'includes/class-institutional-pages.php';
 	}
 
 	public function init(): void {
@@ -49,6 +60,15 @@ final class CJ_Aluminios_B2B {
 		CJB2B_B2B_Roles::instance();
 		CJB2B_Product_Fields::instance();
 		CJB2B_Pricing_Engine::instance();
+
+		CJB2B_Frontend::instance();
+		CJB2B_Catalog_UI::instance();
+		CJB2B_Price_Breakdown::instance();
+		CJB2B_WhatsApp_Checkout::instance();
+
+		CJB2B_Tratamientos_Catalog::instance();
+		CJB2B_Simulador_2D::instance();
+		CJB2B_Institutional_Pages::instance();
 	}
 
 	public function aviso_falta_woocommerce(): void {
@@ -67,3 +87,15 @@ cjb2b();
 register_activation_hook( __FILE__, array( 'CJB2B_Admin_Settings', 'activar' ) );
 register_activation_hook( __FILE__, array( 'CJB2B_B2B_Roles', 'activar' ) );
 register_activation_hook( __FILE__, array( 'CJB2B_Product_Fields', 'activar' ) );
+register_activation_hook( __FILE__, array( 'CJB2B_Catalog_UI', 'activar' ) );
+register_activation_hook( __FILE__, array( 'CJB2B_Institutional_Pages', 'activar' ) );
+
+// El plugin solo usa la API CRUD de pedidos, así que es compatible con HPOS.
+add_action(
+	'before_woocommerce_init',
+	static function () {
+		if ( class_exists( '\Automattic\WooCommerce\Utilities\FeaturesUtil' ) ) {
+			\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility( 'custom_order_tables', __FILE__, true );
+		}
+	}
+);

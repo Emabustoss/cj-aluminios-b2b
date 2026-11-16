@@ -27,17 +27,63 @@ cj-aluminios-b2b/
     ├── class-admin-settings.php
     ├── class-product-fields.php
     ├── class-pricing-engine.php
-    └── class-b2b-roles.php
+    ├── class-b2b-roles.php
+    ├── class-frontend.php            (Fase 2: estilos, ajustes "Catálogo y WhatsApp", helpers de rol/precio)
+    ├── class-catalog-ui.php          (Fase 2: shortcode [cj_catalogo_b2b] + AJAX)
+    ├── class-price-breakdown.php     (Fase 2: desglose en ficha y carrito)
+    ├── class-whatsapp-checkout.php   (Fase 2: pedido pending + enlace wa.me)
+    ├── class-tratamientos-catalog.php (Fase 3: paleta de 27 tratamientos + [cj_muestrario_acabados])
+    ├── class-simulador-2d.php        (Fase 3: [cj_simulador_2d], validación de foto y cotización)
+    └── class-institutional-pages.php (Fase 3: [cj_home_b2b], [cj_alta_b2b], páginas y menú)
+assets/
+├── css/cj-b2b-theme.css              (paleta en variables :root, mobile-first)
+├── js/cj-b2b-catalog.js, cj-b2b-whatsapp.js, cj-simulador-2d.js, cj-b2b-alta.js
+└── img/ambientes/*.svg               (3 ambientes de muestra del simulador, ilustraciones)
 ```
+
+### Notas de la Fase 3 (implementada, v1.2.0)
+- **Paleta única:** `CJB2B_Tratamientos_Catalog::tratamientos()` es la única fuente de colores (14 pintados, 6 anodizados, 7 símil madera). Es una paleta visual: los precios siguen saliendo de los 9 acabados `pa_acabado` (la clave `acabado` de cada tratamiento indica con cuál se cotiza, `''` si no hay equivalencia). Los HEX son aproximados (no hay carta de color certificada del cliente).
+- **Simulador:** la abertura se dibuja por código en Canvas (no usa fotos de aberturas ni máscaras) y se deforma en perspectiva a 4 esquinas. La foto del usuario se valida en el servidor (5 MB, MIME real JPG/PNG/WebP) y **no se guarda**. `marco`/`hoja` de cada línea en `CJB2B_Simulador_2D::lineas()` son anchos visuales proporcionales, no cotas de fabricación.
+- **Tema de bloques:** el contenido se renderiza antes de `wp_enqueue_scripts`; un shortcode que llama a `wp_localize_script()` tiene que registrar el script antes (ver `render_shortcode()` del simulador).
+- `wp_update_post()` quita barras: el contenido con JSON de bloques va con `wp_slash()`.
+- **Alta gremio:** `[cj_alta_b2b]` crea el usuario siempre con rol `publico` (0%) y meta `cjb2b_alta_estado = pendiente`; la lista se asigna a mano (CJ Aluminios B2B → Solicitudes de gremio) y al asignarla pasa a `aprobada`. Máx. 3 envíos/hora por IP.
+- Rate limiting compartido: `CJB2B_Frontend::limite_superado()` / `registrar_intento()`. Enlaces de WhatsApp: `CJB2B_Frontend::whatsapp_url()`.
+- Portada y menú: `wp eval 'CJB2B_Institutional_Pages::configurar_sitio();'` (deja "Inicio" como portada y reescribe el menú; no corre sola al activar).
+
+### Notas de la Fase 2 (implementada)
+- La Fase 2 solo **lee** lo que calcula la Fase 1 (precio público en `_price` de la variación + descuento del rol). No duplicar la fórmula del precio por kilo fuera de `class-pricing-engine.php`.
+- La página Carrito debe usar el shortcode clásico `[woocommerce_cart]`, no el bloque: el carrito de bloques ignora los filtros PHP (precios ocultos a visitantes) y no dispara `woocommerce_proceed_to_checkout`.
+- `esc_url_raw()` borra los `%0A` de una URL: en el enlace de WhatsApp se aplica solo a la base y el texto va con `rawurlencode()`.
+- Los accesorios se filtran por la categoría `accesorios`; sus familias son subcategorías de esa categoría.
 
 ## Comandos Útiles
 - Git: Mantener commits atómicos por funcionalidad (ej. `feat(b2b): implement pricing hook`).
 
-## Fase 2 (planificada, no iniciada)
-1. **Navegación de catálogo por línea técnica** (Herrero, Módena, A30 New, Estructurales, Mamparas) — frontend, no iniciado.
-2. **Cotizador por WhatsApp** (+54 341 5985683) en vez de checkout con pago online — confirmado con el cliente, no se integra pasarela de pago.
-3. **Visualizador de acabados** (versión simple aprobada, no la de "subí tu foto" estilo Nexo Aberturas):
+## Fase 2 (completa, v1.1.0)
+1. **Navegación de catálogo por línea técnica** (Herrero, Módena, A30 New, Estructurales, Mamparas, Accesorios) — hecho: página "Catálogo B2B" con `[cj_catalogo_b2b]`.
+2. **Cotizador por WhatsApp** (+54 341 5985683) en vez de checkout con pago online — hecho; el checkout estándar queda oculto (ajuste en CJ Aluminios B2B → Catálogo y WhatsApp).
+3. **Desglose transparente de precios** en ficha de producto y líneas del carrito — hecho.
+
+Cómo probar: `/catalogo-b2b/` en el sitio local. WooCommerce está en modo "Próximamente": desactivarlo temporalmente (`wp option update woocommerce_coming_soon no`) y reactivarlo al terminar. Los precios por rol se verifican por WP-CLI con `--user=<id>` (no hay usuarios de prueba con rol B2B creados).
+
+## Fase 3 (hecha en v1.2.0: simulador, muestrario, portada y alta gremio)
+Páginas: `/` (Inicio), `/simulador-de-aberturas/`, `/tratamientos-y-acabados/`, `/registro-gremio-b2b/`. El "alcance candidato" de más abajo quedó así: el visualizador se resolvió con el simulador 2D dibujado por código (ya no hacen falta las ~21 fotos base); herrajes e imágenes de producto siguen pendientes. El alta de clientes gremio ya tiene formulario.
+
+Pendiente de contenido del cliente: validar los HEX contra el muestrario físico, validar los textos de las fichas técnicas, reemplazar los 3 ambientes ilustrados por fotos reales y confirmar horario de atención.
+
+Decisiones abiertas que siguen sin confirmar con el cliente:
+- **Precios para visitantes:** hoy ocultos por defecto (mensaje "Iniciá sesión para ver precio gremio"). Es un checkbox en CJ Aluminios B2B → Catálogo y WhatsApp.
+- **Descuento por rol en accesorios:** hoy no se aplica (el motor solo descuenta perfiles). Cambiarlo implica tocar `class-pricing-engine.php`.
+- **Precios por kilo faltantes:** tabla Estructurales completa en 0 y, en Estándar, Símil Madera y los 4 anodizados en 0 → esos productos/acabados muestran "Consultar" y no se pueden agregar al pedido.
+- **Moneda y formato:** WooCommerce sigue en USD y locale `en_US` (los precios salen como `$13,554.00`). Falta pasar a ARS / es_AR.
+- **IVA:** sin definir; no tocar impuestos de WooCommerce hasta que el cliente avise.
+- **Marca:** la paleta es gris neutro; cuando haya logo, cambiar solo las variables `:root` de `assets/css/cj-b2b-theme.css`.
+- **Alta de clientes gremio:** los roles se asignan a mano desde el admin; no hay formulario de registro/solicitud de cuenta.
+
+Alcance candidato:
+1. **Visualizador de acabados** (versión simple aprobada, no la de "subí tu foto" estilo Nexo Aberturas):
    - Selector de línea + tipo de abertura + acabado, con **overlay de color en vivo** (Canvas/JS) sobre una imagen base neutra por tipo de abertura — no una imagen por cada combinación de color.
    - Contenido necesario: ~7 tipos de abertura por línea × 3 líneas (Herrero, Módena, A30 New) ≈ 21 fotos/renders base, vista frontal/ortogonal (no perspectiva), acabado claro, fondo limpio, alta resolución. El trabajo manual es la máscara (separar perfil de aluminio del resto de la imagen), una vez por foto.
    - Sin costo recurrente (no usa IA ni APIs pagas; corre client-side).
-4. **Herrajes/accesorios:** cargar el catálogo real cuando el cliente arme el CSV con precios (pendiente, hay un PDF de accesorios del fabricante sin revisar todavía: `CJ Metales 2024 - Catalogo ACCESORIO final.pdf`).
+2. **Herrajes/accesorios:** cargar el catálogo real cuando el cliente arme el CSV con precios (hay un PDF de accesorios del fabricante sin revisar todavía: `Catalogos_pdf/CJ-Metales-2024-Catalogo-ACCESORIO-final-1.pdf`, no versionado). Cargarlos como productos simples con `es_perfil = no`, en la categoría `accesorios` y una subcategoría por familia (el catálogo ya los filtra así), con el campo "Presentación / unidad".
+3. **Imágenes de producto:** ningún producto tiene imagen cargada todavía.
