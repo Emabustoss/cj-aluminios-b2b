@@ -32,3 +32,12 @@ cj-aluminios-b2b/
 
 ## Comandos Útiles
 - Git: Mantener commits atómicos por funcionalidad (ej. `feat(b2b): implement pricing hook`).
+
+## Fase 2 (planificada, no iniciada)
+1. **Navegación de catálogo por línea técnica** (Herrero, Módena, A30 New, Estructurales, Mamparas) — frontend, no iniciado.
+2. **Cotizador por WhatsApp** (+54 341 5985683) en vez de checkout con pago online — confirmado con el cliente, no se integra pasarela de pago.
+3. **Visualizador de acabados** (versión simple aprobada, no la de "subí tu foto" estilo Nexo Aberturas):
+   - Selector de línea + tipo de abertura + acabado, con **overlay de color en vivo** (Canvas/JS) sobre una imagen base neutra por tipo de abertura — no una imagen por cada combinación de color.
+   - Contenido necesario: ~7 tipos de abertura por línea × 3 líneas (Herrero, Módena, A30 New) ≈ 21 fotos/renders base, vista frontal/ortogonal (no perspectiva), acabado claro, fondo limpio, alta resolución. El trabajo manual es la máscara (separar perfil de aluminio del resto de la imagen), una vez por foto.
+   - Sin costo recurrente (no usa IA ni APIs pagas; corre client-side).
+4. **Herrajes/accesorios:** cargar el catálogo real cuando el cliente arme el CSV con precios (pendiente, hay un PDF de accesorios del fabricante sin revisar todavía: `CJ Metales 2024 - Catalogo ACCESORIO final.pdf`).
