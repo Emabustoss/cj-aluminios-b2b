@@ -31,11 +31,24 @@ cj-aluminios-b2b/
     ├── class-frontend.php            (Fase 2: estilos, ajustes "Catálogo y WhatsApp", helpers de rol/precio)
     ├── class-catalog-ui.php          (Fase 2: shortcode [cj_catalogo_b2b] + AJAX)
     ├── class-price-breakdown.php     (Fase 2: desglose en ficha y carrito)
-    └── class-whatsapp-checkout.php   (Fase 2: pedido pending + enlace wa.me)
+    ├── class-whatsapp-checkout.php   (Fase 2: pedido pending + enlace wa.me)
+    ├── class-tratamientos-catalog.php (Fase 3: paleta de 27 tratamientos + [cj_muestrario_acabados])
+    ├── class-simulador-2d.php        (Fase 3: [cj_simulador_2d], validación de foto y cotización)
+    └── class-institutional-pages.php (Fase 3: [cj_home_b2b], [cj_alta_b2b], páginas y menú)
 assets/
 ├── css/cj-b2b-theme.css              (paleta en variables :root, mobile-first)
-└── js/cj-b2b-catalog.js, cj-b2b-whatsapp.js
+├── js/cj-b2b-catalog.js, cj-b2b-whatsapp.js, cj-simulador-2d.js, cj-b2b-alta.js
+└── img/ambientes/*.svg               (3 ambientes de muestra del simulador, ilustraciones)
 ```
+
+### Notas de la Fase 3 (implementada, v1.2.0)
+- **Paleta única:** `CJB2B_Tratamientos_Catalog::tratamientos()` es la única fuente de colores (14 pintados, 6 anodizados, 7 símil madera). Es una paleta visual: los precios siguen saliendo de los 9 acabados `pa_acabado` (la clave `acabado` de cada tratamiento indica con cuál se cotiza, `''` si no hay equivalencia). Los HEX son aproximados (no hay carta de color certificada del cliente).
+- **Simulador:** la abertura se dibuja por código en Canvas (no usa fotos de aberturas ni máscaras) y se deforma en perspectiva a 4 esquinas. La foto del usuario se valida en el servidor (5 MB, MIME real JPG/PNG/WebP) y **no se guarda**. `marco`/`hoja` de cada línea en `CJB2B_Simulador_2D::lineas()` son anchos visuales proporcionales, no cotas de fabricación.
+- **Tema de bloques:** el contenido se renderiza antes de `wp_enqueue_scripts`; un shortcode que llama a `wp_localize_script()` tiene que registrar el script antes (ver `render_shortcode()` del simulador).
+- `wp_update_post()` quita barras: el contenido con JSON de bloques va con `wp_slash()`.
+- **Alta gremio:** `[cj_alta_b2b]` crea el usuario siempre con rol `publico` (0%) y meta `cjb2b_alta_estado = pendiente`; la lista se asigna a mano (CJ Aluminios B2B → Solicitudes de gremio) y al asignarla pasa a `aprobada`. Máx. 3 envíos/hora por IP.
+- Rate limiting compartido: `CJB2B_Frontend::limite_superado()` / `registrar_intento()`. Enlaces de WhatsApp: `CJB2B_Frontend::whatsapp_url()`.
+- Portada y menú: `wp eval 'CJB2B_Institutional_Pages::configurar_sitio();'` (deja "Inicio" como portada y reescribe el menú; no corre sola al activar).
 
 ### Notas de la Fase 2 (implementada)
 - La Fase 2 solo **lee** lo que calcula la Fase 1 (precio público en `_price` de la variación + descuento del rol). No duplicar la fórmula del precio por kilo fuera de `class-pricing-engine.php`.
@@ -53,8 +66,12 @@ assets/
 
 Cómo probar: `/catalogo-b2b/` en el sitio local. WooCommerce está en modo "Próximamente": desactivarlo temporalmente (`wp option update woocommerce_coming_soon no`) y reactivarlo al terminar. Los precios por rol se verifican por WP-CLI con `--user=<id>` (no hay usuarios de prueba con rol B2B creados).
 
-## Fase 3 (pendiente, no iniciada)
-Antes de arrancar, confirmar con el cliente estas decisiones abiertas de la Fase 2:
+## Fase 3 (hecha en v1.2.0: simulador, muestrario, portada y alta gremio)
+Páginas: `/` (Inicio), `/simulador-de-aberturas/`, `/tratamientos-y-acabados/`, `/registro-gremio-b2b/`. El "alcance candidato" de más abajo quedó así: el visualizador se resolvió con el simulador 2D dibujado por código (ya no hacen falta las ~21 fotos base); herrajes e imágenes de producto siguen pendientes. El alta de clientes gremio ya tiene formulario.
+
+Pendiente de contenido del cliente: validar los HEX contra el muestrario físico, validar los textos de las fichas técnicas, reemplazar los 3 ambientes ilustrados por fotos reales y confirmar horario de atención.
+
+Decisiones abiertas que siguen sin confirmar con el cliente:
 - **Precios para visitantes:** hoy ocultos por defecto (mensaje "Iniciá sesión para ver precio gremio"). Es un checkbox en CJ Aluminios B2B → Catálogo y WhatsApp.
 - **Descuento por rol en accesorios:** hoy no se aplica (el motor solo descuenta perfiles). Cambiarlo implica tocar `class-pricing-engine.php`.
 - **Precios por kilo faltantes:** tabla Estructurales completa en 0 y, en Estándar, Símil Madera y los 4 anodizados en 0 → esos productos/acabados muestran "Consultar" y no se pueden agregar al pedido.

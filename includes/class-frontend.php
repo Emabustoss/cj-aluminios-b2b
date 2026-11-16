@@ -50,6 +50,11 @@ class CJB2B_Frontend {
 			'ocultar_checkout'           => 'yes',
 			'por_pagina'                 => 24,
 			'catalogo_page_id'           => 0,
+			// Fase 3: datos de contacto de la portada e IDs de las páginas institucionales.
+			'direccion'                  => 'Dean Funes 779, Rosario, Santa Fe',
+			'horario'                    => __( 'Lunes a viernes', 'cj-aluminios-b2b' ),
+			'email_contacto'             => 'cjmet14@yahoo.com',
+			'paginas'                    => array(),
 		);
 	}
 
@@ -73,6 +78,66 @@ class CJB2B_Frontend {
 	public static function whatsapp_numero(): string {
 		$numero = preg_replace( '/\D+/', '', (string) self::ajuste( 'whatsapp_numero' ) );
 		return '' !== $numero ? $numero : '5493415985683';
+	}
+
+	/**
+	 * Enlace wa.me con el mensaje ya armado. esc_url_raw() borra los %0A, así
+	 * que se aplica solo a la base; el texto va con rawurlencode().
+	 */
+	public static function whatsapp_url( string $mensaje = '' ): string {
+		$base = esc_url_raw( 'https://wa.me/' . self::whatsapp_numero() );
+		return '' !== $mensaje ? $base . '?text=' . rawurlencode( $mensaje ) : $base;
+	}
+
+	/** Número de WhatsApp legible: +54 9 341 598-5683 → "+54 341 5985683". */
+	public static function whatsapp_legible(): string {
+		$numero = self::whatsapp_numero();
+
+		if ( preg_match( '/^549(\d{3})(\d{7})$/', $numero, $m ) ) {
+			return '+54 ' . $m[1] . ' ' . $m[2];
+		}
+
+		return '+' . $numero;
+	}
+
+	/* ------------------------------------------- Anti-spam (rate limiting) */
+
+	/** Recorta un texto ya saneado a un máximo de caracteres. */
+	public static function recortar( string $texto, int $maximo ): string {
+		$texto = trim( $texto );
+		return function_exists( 'mb_substr' ) ? mb_substr( $texto, 0, $maximo ) : substr( $texto, 0, $maximo );
+	}
+
+	private static function clave_limite( string $prefijo ): string {
+		$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+		return 'cjb2b_rl_' . sanitize_key( $prefijo ) . '_' . md5( $ip );
+	}
+
+	/** ¿Esta IP ya llegó al máximo de envíos de este formulario? */
+	public static function limite_superado( string $prefijo, int $maximo ): bool {
+		$registro = get_transient( self::clave_limite( $prefijo ) );
+		return is_array( $registro ) && (int) $registro['cantidad'] >= $maximo;
+	}
+
+	/**
+	 * Suma un envío a la cuenta de esta IP. La ventana no se renueva con cada
+	 * envío: vence $ventana segundos después del primero.
+	 */
+	public static function registrar_intento( string $prefijo, int $ventana ): void {
+		$clave    = self::clave_limite( $prefijo );
+		$ahora    = time();
+		$registro = get_transient( $clave );
+
+		if ( ! is_array( $registro ) || $ahora >= (int) $registro['inicio'] + $ventana ) {
+			$registro = array(
+				'cantidad' => 0,
+				'inicio'   => $ahora,
+			);
+		}
+
+		++$registro['cantidad'];
+
+		set_transient( $clave, $registro, max( 1, (int) $registro['inicio'] + $ventana - $ahora ) );
 	}
 
 	/* ------------------------------------------------------------ Helpers */
@@ -265,6 +330,9 @@ class CJB2B_Frontend {
 			$ajustes['mensaje_visitante']          = '' !== $mensaje ? $mensaje : self::ajustes_default()['mensaje_visitante'];
 			$ajustes['ocultar_checkout']           = isset( $_POST['cjb2b_ocultar_checkout'] ) ? 'yes' : 'no';
 			$ajustes['por_pagina']                 = isset( $_POST['cjb2b_por_pagina'] ) ? max( 6, min( 100, absint( wp_unslash( $_POST['cjb2b_por_pagina'] ) ) ) ) : 24;
+			$ajustes['direccion']                  = isset( $_POST['cjb2b_direccion'] ) ? sanitize_text_field( wp_unslash( $_POST['cjb2b_direccion'] ) ) : '';
+			$ajustes['horario']                    = isset( $_POST['cjb2b_horario'] ) ? sanitize_text_field( wp_unslash( $_POST['cjb2b_horario'] ) ) : '';
+			$ajustes['email_contacto']             = isset( $_POST['cjb2b_email_contacto'] ) ? sanitize_email( wp_unslash( $_POST['cjb2b_email_contacto'] ) ) : '';
 
 			update_option( self::OPTION, $ajustes );
 			echo '<div class="notice notice-success"><p>' . esc_html__( 'Ajustes guardados correctamente.', 'cj-aluminios-b2b' ) . '</p></div>';
@@ -323,6 +391,18 @@ class CJB2B_Frontend {
 						<td>
 							<input type="number" min="6" max="100" step="1" id="cjb2b_por_pagina" name="cjb2b_por_pagina" value="<?php echo esc_attr( $ajustes['por_pagina'] ); ?>" />
 						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="cjb2b_direccion"><?php esc_html_e( 'Dirección (portada)', 'cj-aluminios-b2b' ); ?></label></th>
+						<td><input type="text" class="regular-text" id="cjb2b_direccion" name="cjb2b_direccion" value="<?php echo esc_attr( $ajustes['direccion'] ); ?>" /></td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="cjb2b_horario"><?php esc_html_e( 'Horario de atención (portada)', 'cj-aluminios-b2b' ); ?></label></th>
+						<td><input type="text" class="regular-text" id="cjb2b_horario" name="cjb2b_horario" value="<?php echo esc_attr( $ajustes['horario'] ); ?>" /></td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="cjb2b_email_contacto"><?php esc_html_e( 'Email de contacto (portada)', 'cj-aluminios-b2b' ); ?></label></th>
+						<td><input type="email" class="regular-text" id="cjb2b_email_contacto" name="cjb2b_email_contacto" value="<?php echo esc_attr( $ajustes['email_contacto'] ); ?>" /></td>
 					</tr>
 				</table>
 				<?php submit_button( __( 'Guardar Ajustes', 'cj-aluminios-b2b' ) ); ?>

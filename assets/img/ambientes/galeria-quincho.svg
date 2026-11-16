@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <defs>
+    <pattern id="ladrillo" width="64" height="32" patternUnits="userSpaceOnUse">
+      <rect width="64" height="32" fill="#c9bfb2"/>
+      <rect x="1" y="1" width="62" height="14" fill="#b4573c"/>
+      <rect x="-31" y="17" width="62" height="14" fill="#a94f37"/>
+      <rect x="33" y="17" width="62" height="14" fill="#bb5f42"/>
+    </pattern>
+    <pattern id="baldosa" width="120" height="60" patternUnits="userSpaceOnUse">
+      <rect width="120" height="60" fill="#b98f6b"/>
+      <path d="M0 0h120M0 0v60" stroke="#8f6a4c" stroke-width="3"/>
+    </pattern>
+    <linearGradient id="sombraTecho" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#000" stop-opacity="0.42"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="interior" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b3530"/><stop offset="1" stop-color="#1f1c1a"/>
+    </linearGradient>
+    <radialGradient id="foco" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffd98a" stop-opacity="0.9"/><stop offset="1" stop-color="#ffd98a" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="vano"><rect x="438" y="214" width="348" height="252"/></clipPath>
+  </defs>
+
+  <!-- Pared de ladrillo visto -->
+  <rect width="1200" height="600" fill="url(#ladrillo)"/>
+  <rect width="1200" height="600" fill="#5a2f1f" opacity="0.10"/>
+
+  <!-- Vano hacia el interior -->
+  <g clip-path="url(#vano)">
+    <rect x="438" y="214" width="348" height="252" fill="url(#interior)"/>
+    <circle cx="660" cy="290" r="90" fill="url(#foco)"/>
+    <rect x="655" y="214" width="3" height="52" fill="#15120f"/>
+    <path d="M640 266h34l10 22h-54z" fill="#f1d9a0"/>
+    <rect x="470" y="400" width="200" height="66" fill="#4a4038"/>
+    <rect x="490" y="372" width="60" height="30" fill="#5d5046"/>
+  </g>
+  <path d="M438 214h348v252H438z" fill="none" stroke="#8b4a35" stroke-width="6"/>
+  <rect x="430" y="466" width="364" height="16" fill="#d8d0c4"/>
+  <rect x="430" y="480" width="364" height="4" fill="#000" opacity="0.25"/>
+
+  <!-- Techo de la galería: vigas de madera -->
+  <rect width="1200" height="120" fill="#5b4028"/>
+  <g fill="#6f4e31" stroke="#3f2b1a" stroke-width="2">
+    <path d="M40 0h54l-24 120h-54zM250 0h54l-12 120h-54zM480 0h54l-4 120h-54zM690 0h54l4 120h-54zM900 0h54l12 120h-54zM1110 0h54l24 120h-54z"/>
+  </g>
+  <rect y="104" width="1200" height="26" fill="#4a331f"/>
+  <rect y="130" width="1200" height="110" fill="url(#sombraTecho)"/>
+
+  <!-- Piso de baldosas -->
+  <rect y="600" width="1200" height="200" fill="url(#baldosa)"/>
+  <rect y="600" width="1200" height="200" fill="#000" opacity="0.06"/>
+  <rect y="590" width="1200" height="12" fill="#8a7a6a"/>
+
+  <!-- Parrilla -->
+  <rect x="985" y="170" width="120" height="130" fill="#7d4330"/>
+  <rect x="985" y="170" width="120" height="130" fill="url(#ladrillo)" opacity="0.8"/>
+  <rect x="930" y="300" width="230" height="300" fill="#8b4a35"/>
+  <rect x="930" y="300" width="230" height="300" fill="url(#ladrillo)" opacity="0.85"/>
+  <rect x="918" y="286" width="254" height="20" fill="#d8d0c4"/>
+  <rect x="960" y="360" width="170" height="130" fill="#1b1917"/>
+  <path d="M966 440h158M966 452h158M966 464h158" stroke="#6b6b6b" stroke-width="3"/>
+  <path d="M1000 488c10-20 6-30 18-44 4 18 20 22 14 44z" fill="#e5762f" opacity="0.9"/>
+  <path d="M1060 488c8-14 4-22 14-32 4 14 16 16 10 32z" fill="#f1a13a" opacity="0.9"/>
+
+  <!-- Mesa y bancos -->
+  <ellipse cx="270" cy="716" rx="250" ry="18" fill="#000" opacity="0.2"/>
+  <rect x="70" y="560" width="400" height="26" rx="4" fill="#7a5433"/>
+  <rect x="70" y="582" width="400" height="6" fill="#553820"/>
+  <rect x="100" y="588" width="20" height="124" fill="#5f4127"/>
+  <rect x="420" y="588" width="20" height="124" fill="#5f4127"/>
+  <rect x="40" y="640" width="460" height="16" rx="4" fill="#8a6240"/>
+  <rect x="64" y="656" width="16" height="64" fill="#5f4127"/>
+  <rect x="460" y="656" width="16" height="64" fill="#5f4127"/>
+
+  <!-- Maceta -->
+  <path d="M855 604c-40-50-46-110-30-170 22 40 34 86 32 150 10-70 30-110 62-140-4 62-30 110-58 160z" fill="#4c8046"/>
+  <path d="M820 600h70l-10 90h-50z" fill="#a9583c"/>
+</svg>
