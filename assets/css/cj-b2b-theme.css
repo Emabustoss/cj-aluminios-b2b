@@ -29,6 +29,14 @@
 	--cj-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 	--cj-font-mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 	--cj-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+	--cj-shadow-flotante: 0 4px 14px rgba(0, 0, 0, 0.14);
+
+	/* Sobre fondos de acento (hero, banner, barra, pie) */
+	--cj-sobre-acento-borde: rgba(255, 255, 255, 0.55);
+	--cj-sobre-acento-borde-suave: rgba(255, 255, 255, 0.25);
+	--cj-sobre-acento-velo: rgba(255, 255, 255, 0.12);
+	--cj-sobre-acento-texto-suave: rgba(255, 255, 255, 0.72);
+	--cj-muestra-borde: rgba(0, 0, 0, 0.35);
 }
 
 /* ---------------------------------------------------------------- Base */
@@ -126,7 +134,7 @@
 	min-height: 48px;
 	background: var(--cj-whatsapp);
 	border-color: var(--cj-whatsapp);
-	color: #ffffff;
+	color: var(--cj-accent-contrast);
 	font-size: 16px;
 }
 
@@ -435,7 +443,7 @@
 	border: 1px solid var(--cj-accent);
 	border-radius: var(--cj-radius);
 	background: var(--cj-bg-surface);
-	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+	box-shadow: var(--cj-shadow-flotante);
 	font-size: 14px;
 }
 
@@ -471,7 +479,7 @@
 	position: sticky;
 	top: 8px;
 	z-index: 21;
-	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+	box-shadow: var(--cj-shadow-flotante);
 }
 
 /* ----------------------------------------------- Desglose (ficha/tienda) */
@@ -895,13 +903,13 @@ fieldset.cj-campo {
 .cj-btn--contorno,
 .cj-b2b a.cj-btn--contorno {
 	background: transparent;
-	border-color: rgba(255, 255, 255, 0.55);
+	border-color: var(--cj-sobre-acento-borde);
 	color: var(--cj-accent-contrast);
 }
 
 .cj-btn--contorno:hover,
 .cj-btn--contorno:focus-visible {
-	background: rgba(255, 255, 255, 0.12);
+	background: var(--cj-sobre-acento-velo);
 	border-color: var(--cj-accent-contrast);
 }
 
@@ -1117,6 +1125,12 @@ fieldset.cj-campo {
 	color: var(--cj-text-muted);
 }
 
+/* Descripción de la línea elegida: más oscura que una nota común (contraste AA holgado). */
+.cj-sim__nota--fuerte {
+	color: var(--cj-accent-hover);
+	font-weight: 500;
+}
+
 .cj-sim__ambientes {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1208,7 +1222,7 @@ fieldset.cj-campo {
 	aspect-ratio: 1;
 	min-height: 40px;
 	padding: 0;
-	border: 1px solid rgba(0, 0, 0, 0.35);
+	border: 1px solid var(--cj-muestra-borde);
 	border-radius: var(--cj-radius);
 	cursor: pointer;
 }
@@ -1321,7 +1335,7 @@ fieldset.cj-campo {
 .cj-hero__buscar-fila .cj-btn {
 	min-height: 48px;
 	background: var(--cj-accent-hover);
-	border-color: rgba(255, 255, 255, 0.55);
+	border-color: var(--cj-sobre-acento-borde);
 }
 
 .cj-hero__acciones {
@@ -1419,7 +1433,7 @@ fieldset.cj-campo {
 
 .cj-banner__paleta li {
 	aspect-ratio: 1;
-	border: 1px solid rgba(255, 255, 255, 0.25);
+	border: 1px solid var(--cj-sobre-acento-borde-suave);
 	border-radius: 2px;
 }
 
@@ -1533,5 +1547,212 @@ fieldset.cj-campo {
 @media (prefers-reduced-motion: reduce) {
 	.cj-b2b a.cj-linea {
 		transition: none;
+	}
+}
+
+/* ------------------------------------------- Fase 4: miniatura catálogo */
+
+.cj-prod {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.cj-prod__thumb {
+	flex: none;
+	display: block;
+	width: 56px;
+	height: 56px;
+	border: 1px solid var(--cj-border);
+	border-radius: var(--cj-radius);
+	background: var(--cj-bg-surface);
+	overflow: hidden;
+}
+
+.cj-prod__thumb img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.cj-prod__texto {
+	min-width: 0;
+}
+
+/* ---------------------------------------- Fase 4: barra de cuenta B2B */
+
+.cj-barra {
+	background: var(--cj-accent);
+	color: var(--cj-accent-contrast);
+	font-size: 13px;
+}
+
+.cj-barra__interior {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 4px 16px;
+	max-width: 1340px;
+	margin: 0 auto;
+	padding: 6px 16px;
+}
+
+.cj-b2b.cj-barra a {
+	padding: 6px 0;
+	color: var(--cj-accent-contrast);
+	text-decoration: none;
+}
+
+.cj-b2b.cj-barra a:hover,
+.cj-b2b.cj-barra a:focus-visible {
+	text-decoration: underline;
+}
+
+.cj-b2b.cj-barra a.cj-barra__contacto {
+	color: var(--cj-sobre-acento-texto-suave);
+}
+
+.cj-barra__cuenta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 14px;
+	margin-left: auto;
+}
+
+.cj-barra__rol {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 8px;
+	border: 1px solid var(--cj-sobre-acento-borde);
+	border-radius: var(--cj-radius);
+	background: var(--cj-sobre-acento-velo);
+	white-space: nowrap;
+}
+
+.cj-barra__rol-etiqueta {
+	color: var(--cj-sobre-acento-texto-suave);
+}
+
+.cj-barra__descuento {
+	font-family: var(--cj-font-mono);
+	font-weight: 700;
+}
+
+.cj-barra__pedido {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 600;
+}
+
+.cj-barra__contador {
+	display: inline-block;
+	min-width: 22px;
+	padding: 1px 6px;
+	border-radius: 999px;
+	background: var(--cj-accent-contrast);
+	color: var(--cj-accent);
+	font-family: var(--cj-font-mono);
+	font-size: 12px;
+	font-weight: 700;
+	text-align: center;
+}
+
+@media (max-width: 599px) {
+	.cj-barra__contacto,
+	.cj-barra__rol-etiqueta {
+		display: none;
+	}
+
+	.cj-barra__cuenta {
+		width: 100%;
+		justify-content: space-between;
+	}
+}
+
+/* ---------------------------------------------------- Fase 4: pie B2B */
+
+.cj-pie {
+	margin-top: 48px;
+	background: var(--cj-accent);
+	color: var(--cj-accent-contrast);
+}
+
+.cj-pie__interior {
+	display: grid;
+	gap: 28px;
+	max-width: 1340px;
+	margin: 0 auto;
+	padding: 36px 16px 20px;
+}
+
+.cj-pie__titulo {
+	margin: 0 0 10px;
+	font-size: 13px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.cj-pie p {
+	margin: 0 0 12px;
+}
+
+.cj-pie__marca p:not(.cj-pie__titulo),
+.cj-pie__rol,
+.cj-pie p.cj-pie__legal {
+	color: var(--cj-sobre-acento-texto-suave);
+}
+
+.cj-pie ul {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.cj-pie li {
+	margin: 0;
+	padding: 5px 0;
+}
+
+.cj-b2b.cj-pie li a {
+	color: var(--cj-accent-contrast);
+	text-decoration: none;
+}
+
+.cj-b2b.cj-pie li a:hover,
+.cj-b2b.cj-pie li a:focus-visible {
+	text-decoration: underline;
+}
+
+.cj-b2b.cj-pie a.cj-btn--whatsapp {
+	color: var(--cj-accent-contrast);
+}
+
+.cj-pie__rol {
+	font-size: 13px;
+}
+
+.cj-pie p.cj-pie__legal {
+	max-width: 1340px;
+	margin: 0 auto;
+	padding: 14px 16px 22px;
+	border-top: 1px solid var(--cj-sobre-acento-borde-suave);
+	font-size: 12px;
+}
+
+@media (min-width: 600px) {
+	.cj-pie__interior {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+@media (min-width: 960px) {
+	.cj-pie__interior {
+		grid-template-columns: 1.4fr 1fr 1fr 1fr;
 	}
 }

@@ -152,19 +152,8 @@ class CJB2B_Institutional_Pages {
 			}
 		}
 
-		$enlaces = array();
-
-		foreach ( array( 'inicio', 'catalogo', 'simulador', 'tratamientos', 'alta' ) as $clave ) {
-			$page_id = 'catalogo' === $clave ? (int) CJB2B_Frontend::ajuste( 'catalogo_page_id' ) : (int) ( $ids[ $clave ] ?? 0 );
-
-			if ( $page_id && 'publish' === get_post_status( $page_id ) ) {
-				$enlaces[] = array(
-					'id'    => $page_id,
-					'label' => get_the_title( $page_id ),
-					'url'   => get_permalink( $page_id ),
-				);
-			}
-		}
+		// Misma lista de secciones que usan la barra de cuenta y el pie.
+		$enlaces = CJB2B_Site_Navigation::enlaces();
 
 		$cuenta_id = function_exists( 'wc_get_page_id' ) ? (int) wc_get_page_id( 'myaccount' ) : 0;
 
@@ -178,6 +167,7 @@ class CJB2B_Institutional_Pages {
 
 		if ( function_exists( 'wp_is_block_theme' ) && wp_is_block_theme() ) {
 			self::menu_de_bloques( $enlaces );
+			CJB2B_Site_Navigation::instalar_footer_de_bloques();
 		} else {
 			self::menu_clasico( $enlaces );
 		}
