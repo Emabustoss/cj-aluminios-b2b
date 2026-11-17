@@ -27,6 +27,9 @@ class CJB2B_WhatsApp_Checkout {
 	const META_LISTA     = '_cjb2b_lista';
 	const META_DESCUENTO = '_cjb2b_descuento';
 
+	const ARG_VACIAR   = 'cjb2b_vaciar';
+	const NONCE_VACIAR = 'cjb2b_vaciar_pedido';
+
 	/** Evita imprimir el formulario dos veces en la misma página. */
 	private bool $formulario_impreso = false;
 
@@ -48,6 +51,41 @@ class CJB2B_WhatsApp_Checkout {
 		add_action( 'wp_ajax_nopriv_' . self::ACCION, array( $this, 'ajax_enviar' ) );
 
 		add_action( 'woocommerce_admin_order_data_after_billing_address', array( $this, 'mostrar_en_admin' ) );
+
+		// Vaciar todo el pedido de una vez desde el carrito.
+		add_action( 'woocommerce_cart_actions', array( $this, 'render_boton_vaciar' ) );
+		add_action( 'wp_loaded', array( $this, 'vaciar_pedido' ), 20 );
+	}
+
+	/* ------------------------------------------------------ Vaciar pedido */
+
+	/** Enlace "Vaciar pedido" en la fila de acciones del carrito (con nonce). */
+	public function render_boton_vaciar(): void {
+		$url = wp_nonce_url( add_query_arg( self::ARG_VACIAR, '1', wc_get_cart_url() ), self::NONCE_VACIAR );
+
+		printf(
+			'<a class="button cj-vaciar-pedido" href="%1$s" onclick="return window.confirm(\'%2$s\');">%3$s</a>',
+			esc_url( $url ),
+			esc_js( __( '¿Quitar todos los productos del pedido?', 'cj-aluminios-b2b' ) ),
+			esc_html__( 'Vaciar pedido', 'cj-aluminios-b2b' )
+		);
+	}
+
+	/** Vacía el carrito si la URL trae el pedido de vaciado con un nonce válido. */
+	public function vaciar_pedido(): void {
+		if ( ! isset( $_GET[ self::ARG_VACIAR ] ) || ! function_exists( 'WC' ) || ! WC()->cart ) {
+			return;
+		}
+
+		$nonce = isset( $_GET['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ) : '';
+
+		if ( wp_verify_nonce( $nonce, self::NONCE_VACIAR ) ) {
+			WC()->cart->empty_cart();
+			wc_add_notice( __( 'Se vació el pedido.', 'cj-aluminios-b2b' ), 'success' );
+		}
+
+		wp_safe_redirect( wc_get_cart_url() );
+		exit;
 	}
 
 	public static function entregas(): array {

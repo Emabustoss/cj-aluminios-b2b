@@ -29,6 +29,47 @@
 		paginas: parseInt( raiz.getAttribute( 'data-paginas' ), 10 ) || 1
 	};
 
+	// Vista cuadrícula (por defecto) / lista: se recuerda en este navegador.
+	var vistaEl = raiz.querySelector( '[data-cj-vista]' );
+
+	function aplicarVista( vista ) {
+		raiz.classList.toggle( 'cj-catalogo--grilla', 'grilla' === vista );
+
+		if ( ! vistaEl ) {
+			return;
+		}
+
+		vistaEl.querySelectorAll( '[data-vista]' ).forEach( function ( boton ) {
+			var activa = boton.getAttribute( 'data-vista' ) === vista;
+			boton.classList.toggle( 'is-active', activa );
+			boton.setAttribute( 'aria-pressed', activa ? 'true' : 'false' );
+		} );
+	}
+
+	if ( vistaEl ) {
+		var guardada = 'grilla';
+
+		try {
+			guardada = window.localStorage.getItem( 'cjb2bVista' ) || 'grilla';
+		} catch ( e ) {}
+
+		aplicarVista( guardada );
+
+		vistaEl.addEventListener( 'click', function ( evento ) {
+			var boton = evento.target.closest( '[data-vista]' );
+
+			if ( ! boton ) {
+				return;
+			}
+
+			aplicarVista( boton.getAttribute( 'data-vista' ) );
+
+			try {
+				window.localStorage.setItem( 'cjb2bVista', boton.getAttribute( 'data-vista' ) );
+			} catch ( e ) {}
+		} );
+	}
+
 	var peticion = null;
 	var temporizador = null;
 	var avisoTimer = null;
