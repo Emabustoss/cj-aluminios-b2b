@@ -1758,6 +1758,20 @@
 		botonEnviar.disabled = true;
 		botonEnviar.textContent = cfg.textos.enviando;
 
+		// Pestaña del comprobante abierta dentro del clic (si no, es un pop-up bloqueado).
+		var ventana = null;
+
+		try {
+			ventana = window.open( '', '_blank' );
+
+			if ( ventana ) {
+				ventana.opener = null;
+				ventana.document.body.innerHTML = '<p style="font:16px Arial,sans-serif;padding:24px">' + cfg.textos.enviando + '</p>';
+			}
+		} catch ( e ) {
+			ventana = null;
+		}
+
 		var cuerpo = new URLSearchParams( new FormData( form ) );
 		cuerpo.append( 'action', cfg.accionCotizar );
 		cuerpo.append( 'nonce', cfg.nonce );
@@ -1779,13 +1793,23 @@
 			}
 
 			q( '[data-cj-sim-link]' ).href = json.data.url;
+			q( '[data-cj-sim-comprobante]' ).href = json.data.comprobante;
+			q( '[data-cj-sim-exito-titulo]' ).textContent = cfg.textos.presupuesto.replace( '%s', json.data.numero );
 			form.hidden = true;
 			exito.hidden = false;
 			q( '[data-cj-sim-exito-titulo]' ).focus();
 
-			// Si el navegador bloquea la ventana nueva, queda el botón visible.
+			if ( ventana && ! ventana.closed ) {
+				ventana.location.href = json.data.comprobante;
+			}
+
+			// Si el navegador bloquea WhatsApp, quedan los dos botones visibles.
 			window.open( json.data.url, '_blank', 'noopener' );
 		} ).catch( function ( error ) {
+			if ( ventana && ! ventana.closed ) {
+				ventana.close();
+			}
+
 			errorEl.textContent = ( error && error.message && 'Failed to fetch' !== error.message ) ? error.message : cfg.textos.error;
 			errorEl.hidden = false;
 		} ).then( function () {

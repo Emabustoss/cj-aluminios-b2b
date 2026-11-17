@@ -19,6 +19,22 @@
 	var textoBoton = boton.textContent;
 	var enviando = false;
 
+	function abrirVentana() {
+		try {
+			var v = window.open( '', '_blank' );
+
+			if ( v ) {
+				v.opener = null;
+				v.document.title = cfg.textos.enviando;
+				v.document.body.innerHTML = '<p style="font:16px Arial,sans-serif;padding:24px">' + cfg.textos.enviando + '</p>';
+			}
+
+			return v;
+		} catch ( e ) {
+			return null;
+		}
+	}
+
 	function mostrarError( texto ) {
 		errorEl.textContent = texto;
 		errorEl.hidden = false;
@@ -48,6 +64,10 @@
 		boton.disabled = true;
 		boton.textContent = cfg.textos.enviando;
 
+		// La pestaña del comprobante se abre ahora, dentro del clic: si se
+		// abre después de la respuesta, el navegador la toma como pop-up.
+		var ventana = abrirVentana();
+
 		var cuerpo = new URLSearchParams( new FormData( form ) );
 		cuerpo.append( 'action', cfg.accion );
 
@@ -65,6 +85,7 @@
 			var titulo = raiz.querySelector( '[data-cj-wa-exito-titulo]' );
 			titulo.textContent = json.data.titulo;
 			raiz.querySelector( '[data-cj-wa-link]' ).href = json.data.url;
+			raiz.querySelector( '[data-cj-wa-comprobante]' ).href = json.data.comprobante;
 
 			form.hidden = true;
 			exito.hidden = false;
@@ -76,9 +97,18 @@
 				el.style.display = 'none';
 			} );
 
-			// Si el navegador bloquea la ventana nueva, queda el botón visible.
+			// 1) Comprobante (se abre listo para imprimir / guardar en PDF).
+			if ( ventana && ! ventana.closed ) {
+				ventana.location.href = json.data.comprobante;
+			}
+
+			// 2) WhatsApp. Si el navegador lo bloquea, quedan los dos botones.
 			window.open( json.data.url, '_blank', 'noopener' );
 		} ).catch( function ( error ) {
+			if ( ventana && ! ventana.closed ) {
+				ventana.close();
+			}
+
 			mostrarError( ( error && error.message && 'Failed to fetch' !== error.message ) ? error.message : cfg.textos.error );
 			enviando = false;
 			boton.disabled = false;

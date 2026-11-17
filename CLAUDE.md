@@ -35,7 +35,8 @@ cj-aluminios-b2b/
     ├── class-tratamientos-catalog.php (Fase 3: paleta de 27 tratamientos + [cj_muestrario_acabados])
     ├── class-simulador-2d.php        (Fase 3: [cj_simulador_2d] y cotización; la foto se procesa en el navegador)
     ├── class-institutional-pages.php (Fase 3: [cj_home_b2b], [cj_alta_b2b], páginas y menú)
-    └── class-site-navigation.php     (Fase 4: barra de cuenta con rol B2B, pie [cj_footer_b2b], lista única de enlaces)
+    ├── class-site-navigation.php     (Fase 4: barra de cuenta con rol B2B, pie [cj_footer_b2b], lista única de enlaces)
+    └── class-presupuestos-web.php    (v1.4: presupuestos WEB-00001, comprobante réplica de OLF, Mi cuenta y admin)
 assets/
 ├── css/cj-b2b-theme.css              (paleta en variables :root, mobile-first)
 ├── js/cj-b2b-catalog.js, cj-b2b-whatsapp.js, cj-simulador-2d.js, cj-b2b-alta.js
@@ -44,9 +45,28 @@ scripts/
 ├── import_catalog_images.py          (Fase 4: recorta planos/fotos de los PDF y los vincula por WP-CLI)
 ├── wp_catalog_images.php             (auxiliar del script; solo corre con `wp eval-file`)
 ├── wp_import_accesorios.php          (carga/actualiza accesorios desde un CSV, por WP-CLI)
-└── accesorios_imagenes.csv           (cruce SKU de accesorio ↔ foto del PDF)
+├── accesorios_imagenes.csv           (cruce SKU de accesorio ↔ foto del PDF)
+└── generar_csv_cjmet.py              (v1.4: Maestro + Lista de precios de OLF -> woocommerce_import_cjmet.csv)
 Catalogos_pdf/                        (PDF del fabricante; no versionado, ver .gitignore)
 ```
+
+### Presupuestos web (v1.4.0)
+- **Numeración:** tabla `{prefix}cj_presupuestos`; el número es `WEB-` + el `AUTO_INCREMENT` con 5 dígitos (atómico, no se repite). Es independiente de los pedidos de WooCommerce y de OLF (`0105-...`). Vaciar la tabla (`TRUNCATE`) reinicia en WEB-00001.
+- **Qué se guarda:** cliente (nombre/razón social, CUIT/DNI, domicilio, localidad, provincia, teléfono, condición IVA), ítems, subtotal, descuentos, total, lista B2B, origen (`carrito`/`simulador`), estado (`pendiente`, `confirmado`, `cancelado`), fecha, pedido de WooCommerce asociado y una clave secreta para ver el comprobante sin login.
+- **Ítems como en OLF:** perfil = BULTOS barras, CANTIDAD kg (`peso_metro × 6 × barras`), P. UNITARIO precio público por kg, %Dto = descuento de la lista. Accesorio = unidades a precio fijo. El precio público sale del **total que cobra el carrito** (no de `_regular_price`, que puede quedar viejo). IVA "contenido" = total × 21/121.
+- **Comprobante:** `/?cjb2b_presupuesto=WEB-00001&k=<clave>` (dueño logueado o admin no necesitan la clave). Es HTML A4 imprimible; `&imprimir=1` abre el diálogo de impresión y el título `PRESUPUESTO_WEB-00001` es el nombre por defecto al "Guardar como PDF". No hay librería de PDF (Dompdf) instalada.
+- **Flujo:** el botón "Generar Presupuesto y Enviar por WhatsApp" (carrito y simulador) registra el presupuesto, abre el comprobante en una pestaña que se pre-abre dentro del clic (si se abre después de la respuesta, el navegador la bloquea) e intenta abrir WhatsApp; si el navegador bloquea alguna, quedan los dos botones visibles. El simulador registra la abertura como ítem "a cotizar".
+- **Datos fiscales:** el formulario del carrito pide CUIT/DNI, localidad y condición frente al IVA (meta `cjb2b_condicion_iva`), los precarga del perfil y los guarda en el perfil del usuario logueado.
+- **Pantallas:** Mi cuenta → "Mis Presupuestos Web" (endpoint `presupuestos-web`); admin → CJ Aluminios B2B → Presupuestos Web (búsqueda por número, cliente o CUIT; cambio de estado; ver/PDF; datos del emisor del encabezado, opción `cjb2b_emisor`).
+- **WhatsApp destino:** el mismo número de siempre, en CJ Aluminios B2B → Catálogo y WhatsApp.
+- **Stock:** WooCommerce tiene el control de stock global apagado (`woocommerce_manage_stock = no`) y todos los productos en `manage_stock = no` / `instock`. La disponibilidad se confirma por WhatsApp.
+
+### CSV de OLF (`scripts/generar_csv_cjmet.py`)
+- Entrada: `Catalogos_pdf/20327415779_MaestroArticulos_20261117_84058.pdf` (lista de precios "01 CONS FINAL", precio sin IVA en `LST[01]`) y `Catalogos_pdf/Maestro_de_Articulos-20327415779_2026_11_17_JN.pdf` (descripción más larga y precio con IVA en "Importe A"). Salida: `Catalogos_pdf/woocommerce_import_cjmet.csv` (no versionado).
+- Comando: `python scripts/generar_csv_cjmet.py --wp "<php.exe>|-c|<php.ini>|<wp-cli.phar>|--path=<sitio>"` (el `--wp` es opcional: reutiliza los nombres de la tienda cuando coincide el código de matriz).
+- **Precios por kilo:** en OLF los perfiles se venden por kilo. `Regular price` = precio de lista con IVA por kg tal como figura en OLF (ej. Natural 9,75). El presupuesto 0105-00001444 lo convierte a $12.722,75/kg, así que la lista de OLF está en otra moneda o unidad (cotización ≈ 1.305). Los accesorios mezclan valores chicos y grandes (17,21 / 8.678,66). **No importar sin confirmar moneda y unidad con el cliente.**
+- **Tratamientos:** OLF no dice el color de cada variante, solo el grupo. Cada perfil tiene 12 variantes en orden fijo: Natural, Pintura 1-3, Símil madera, Anodizado 1-6, Pintura 4. Los nombres llevan ese número; falta que el cliente diga qué color es cada uno. En Estructurales (todos "Estructura") el orden se infiere por el patrón de precios y queda marcado en `Meta: _cjm_tratamiento_olf`.
+- **Choque con el catálogo actual:** la tienda tiene 207 perfiles variables (un producto por matriz, 9 acabados, precio por barra calculado con la tabla por kilo). El CSV trae 2.577 perfiles como productos simples, uno por código y color. Importarlo tal cual duplica el catálogo y saltea el motor de precios por barra: hay que decidir el modelo antes de importar.
 
 ### Notas de la Fase 4 (implementada, v1.3.0)
 - **Enlaces en un solo lugar:** `CJB2B_Site_Navigation::enlaces()` alimenta el menú principal, la barra de cuenta y el pie. Para sumar una sección se agrega ahí y se vuelve a correr `configurar_sitio()`.

@@ -1881,3 +1881,16 @@ fieldset.cj-campo {
 .woocommerce-cart a.button.cj-vaciar-pedido:focus-visible {
 	border-color: var(--cj-error);
 }
+
+/* ------------------------------------------- Presupuestos web: botones */
+
+.cj-wa__botones {
+	display: grid;
+	gap: 8px;
+}
+
+@media (min-width: 600px) {
+	.cj-wa__botones {
+		grid-template-columns: 1fr 1fr;
+	}
+}
