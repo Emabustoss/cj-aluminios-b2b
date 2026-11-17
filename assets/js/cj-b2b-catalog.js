@@ -211,6 +211,10 @@
 			if ( json && json.success ) {
 				aviso( json.data.mensaje, 'ok' );
 				cantidadEl.textContent = json.data.cantidad;
+				// Contador de la barra de cuenta (fuera del catálogo).
+				document.querySelectorAll( '[data-cj-pedido-cuenta]' ).forEach( function ( el ) {
+					el.textContent = json.data.cantidad;
+				} );
 				pedidoBar.hidden = false;
 				qty.value = 1;
 			} else {

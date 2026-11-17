@@ -480,10 +480,22 @@ class CJB2B_Catalog_UI {
 				. '</td>';
 
 			// Nombre.
-			$html .= '<td class="cj-col-nombre">'
+			// Miniatura (plano del catálogo o placeholder neutro) + nombre.
+			$miniatura = $producto->get_image(
+				'thumbnail',
+				array(
+					'class'   => 'cj-prod__img',
+					'loading' => 'lazy',
+					'alt'     => '',
+				)
+			);
+
+			$html .= '<td class="cj-col-nombre"><div class="cj-prod">'
+				. '<a class="cj-prod__thumb" href="' . esc_url( $producto->get_permalink() ) . '" tabindex="-1" aria-hidden="true">' . wp_kses_post( $miniatura ) . '</a>'
+				. '<div class="cj-prod__texto">'
 				. '<a href="' . esc_url( $producto->get_permalink() ) . '">' . esc_html( $producto->get_name() ) . '</a>'
 				. ( '' !== $etiqueta_linea ? '<br><span class="cj-tag">' . esc_html( $etiqueta_linea ) . '</span>' : '' )
-				. '</td>';
+				. '</div></div></td>';
 
 			// Peso.
 			$html .= '<td class="cj-col-peso" data-label="' . esc_attr__( 'Peso', 'cj-aluminios-b2b' ) . '">'
