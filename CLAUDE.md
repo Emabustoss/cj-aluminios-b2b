@@ -42,7 +42,9 @@ assets/
 └── img/ambientes/*.svg               (3 ambientes de muestra del simulador, ilustraciones)
 scripts/
 ├── import_catalog_images.py          (Fase 4: recorta planos/fotos de los PDF y los vincula por WP-CLI)
-└── wp_catalog_images.php             (auxiliar del script; solo corre con `wp eval-file`)
+├── wp_catalog_images.php             (auxiliar del script; solo corre con `wp eval-file`)
+├── wp_import_accesorios.php          (carga/actualiza accesorios desde un CSV, por WP-CLI)
+└── accesorios_imagenes.csv           (cruce SKU de accesorio ↔ foto del PDF)
 Catalogos_pdf/                        (PDF del fabricante; no versionado, ver .gitignore)
 ```
 
@@ -89,7 +91,7 @@ Pendiente de contenido del cliente: validar los HEX contra el muestrario físico
 
 ## Fase 4 (hecha en v1.3.0: imágenes de catálogo, navegación y preparación para producción)
 1. **Imágenes de perfiles** — hecho. `scripts/import_catalog_images.py` recortó los planos de `Catalogo_CJ_Metales_2023.pdf` a PNG 800x800 sobre blanco: **206 de 207 perfiles con imagen** (164 planos propios + 42 Estructurales con el esquema de su familia). Sin imagen: `A30-6073` (el PDF no trae ese plano; usa el placeholder).
-2. **Accesorios** — pospuesto por decisión del cliente (todavía no hay productos cargados). El script ya extrae las 109 fotos de `CJ-Metales-2024-Catalogo-ACCESORIO-final-1.pdf` a `uploads/cj-catalogo/accesorio-*.png` y las lista en `uploads/cj-catalogo/manifest.csv` con un `sku_sugerido` (`ACC-<CÓDIGO>`). No entran a la biblioteca de medios hasta que exista el producto.
+2. **Accesorios** — hecho: **166 accesorios cargados** desde el CSV del cliente (10 familias bajo `accesorios`), **122 con foto** del PDF `CJ-Metales-2024-Catalogo-ACCESORIO-final-1.pdf`. Los 44 sin foto (el PDF no la trae: cuñas, burletes, cordones, calzos, E71, E78, H53, H56, H81, H82, H90, T112, siliconas de color, cierre eco) usan el placeholder y el cliente carga la imagen a mano. Todos están sin precio (el CSV vino en 0) y por eso muestran "Consultar".
 3. **Navegación** — hecho: menú principal, barra de cuenta con rol B2B y pie B2B (ver "Notas de la Fase 4").
 4. **Auditoría** — hecho: `php -l` limpio en todos los PHP; los 6 endpoints AJAX validan nonce (`check_ajax_referer`), los 5 formularios de admin validan nonce + capacidad, toda entrada pasa por `sanitize_*`/`absint`/`floatval`, la salida va escapada y la foto del simulador se valida por MIME real (extensión + `finfo` + `wp_getimagesize`) sin guardarse.
 5. **Limpieza de LocalWP** — hecho: se borraron los 2 productos de prueba (`TEST-PERFIL-001`, `TEST-NOPERFIL-001`), la entrada "Hello world", la "Sample page" y las sesiones de carrito. No había pedidos ni usuarios de prueba (queda solo el administrador). El modo "Próximamente" de WooCommerce queda **activado** hasta el lanzamiento.
@@ -107,7 +109,12 @@ python3 scripts/import_catalog_images.py
 
 Opciones: `--dry-run` (solo informa), `--solo perfiles|accesorios`, `--force` (pisa imágenes cargadas a mano), `--pdf-dir`, `--wp-path`. Tarda unos 8 minutos la primera vez (WordPress genera las miniaturas) y segundos cuando no hay cambios. Al final informa cuántos perfiles y accesorios quedaron con imagen.
 
-**Cuando se carguen los accesorios:** crear los productos simples con `es_perfil = no`, categoría `accesorios` (subcategoría por familia) y el SKU de la columna `sku_sugerido` de `manifest.csv` (o editar el SKU a gusto y renombrar igual en el CSV de carga). Volver a correr el script: vincula sola cada foto con su producto.
+### Accesorios: carga y actualización
+- **Productos:** `wp eval-file scripts/wp_import_accesorios.php <archivo.csv>` crea o actualiza por SKU (columnas `SKU`, `Nombre`, `Precio normal`, `Categorías` = `Accesorios > Familia`, y opcional `Presentación`). No toca imagen ni descripción. El CSV ya limpio que se usó queda en `Catalogos_pdf/accesorios_b2b_limpio.csv` (no versionado): para cargar precios alcanza con completar `Precio normal` ahí y volver a correr el comando.
+- **Fotos:** el SKU de la tienda no sale del PDF, así que el cruce foto ↔ SKU está en `scripts/accesorios_imagenes.csv` (`sku,imagen`; varios SKU pueden compartir foto). Para sumar o corregir un cruce se edita ese archivo y se corre `import_catalog_images.py`. Una imagen cargada a mano desde el admin no se pisa.
+- **Convención de nombres** (aplicada al importar): descripción + código + color + presentación al final (`x 100`, `(rollo x 25 m)`); "Módena" con tilde; sin abreviaturas (`aluminio`, `plástica`, `con ruleman`); la unidad suelta no lleva `x 1`. La presentación también va en la meta `_presentacion`.
+- **Ajustes que se hicieron al CSV del cliente:** filas vacías descartadas; 16 SKU repetidos renombrados con su presentación (`B52` rollo x 25 m → `B52-25`, `Y01` x 16 → `Y01-16`, `H36-BCO-12` Negro → `H36-NG-12`); espacios en SKU reemplazados por guion (`H56-KIT BCO-2` → `H56-KIT-BCO-2`); 16 filas sin categoría heredaron la de la fila anterior.
+- Las variantes Blanco/Negro de una misma pieza (H33, H36, H57) comparten la foto del PDF, que muestra un solo color.
 
 ### Guía de carga de precios por kilo faltantes
 Hoy están en 0 (y por eso esos acabados muestran "Consultar" y no se pueden pedir):
@@ -165,7 +172,7 @@ Sin SSH: mismo flujo con un plugin de migración (Duplicator / All-in-One WP Mig
 - [ ] **IVA:** sin definir; no tocar impuestos de WooCommerce hasta que el cliente avise.
 - [ ] **Precios para visitantes:** hoy ocultos ("Iniciá sesión para ver precio gremio"). Checkbox en CJ Aluminios B2B → Catálogo y WhatsApp.
 - [ ] **Descuento por rol en accesorios:** hoy no se aplica (el motor solo descuenta perfiles). Cambiarlo implica tocar `class-pricing-engine.php`.
-- [ ] **Accesorios:** CSV con productos y precios; después correr el importador de imágenes.
+- [ ] **Accesorios:** cargar los precios (hoy los 166 están sin precio → "Consultar") y las 44 imágenes que no trae el PDF.
 - [ ] **Marca:** nombre del sitio (hoy `cj-aluminio`), logo y paleta. La paleta se cambia solo en el bloque `:root` de `assets/css/cj-b2b-theme.css`.
 - [ ] **Contenido de la Fase 3:** HEX reales del muestrario, textos de fichas técnicas, fotos reales de ambientes, horario de atención.
 - [ ] **Páginas legales:** "Política de privacidad" y "Reembolsos" están en borrador.

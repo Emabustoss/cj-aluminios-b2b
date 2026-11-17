@@ -62,6 +62,7 @@ CLAVE_PLACEHOLDER = "placeholder-sin-imagen"
 PLUGIN_DIR = Path(__file__).resolve().parent.parent
 WP_ROOT = PLUGIN_DIR.parent.parent.parent
 HELPER_PHP = Path(__file__).resolve().parent / "wp_catalog_images.php"
+MAPA_ACCESORIOS = Path(__file__).resolve().parent / "accesorios_imagenes.csv"
 
 RE_ETIQUETA = re.compile(r"^\s*([A-Z0-9]{1,6}(?: [A-Z0-9]{1,4})?)\s*-\s+\S")
 RE_NUMERO = re.compile(r"^[\d.,\s°º]+$")
@@ -450,6 +451,16 @@ def main() -> int:
         if prod["sku"]:
             por_sku[prod["sku"].strip().upper()] = prod
 
+    # Accesorios: el SKU de la tienda no sale del PDF, así que el cruce foto ↔
+    # SKU está en scripts/accesorios_imagenes.csv (varios SKU pueden compartir
+    # foto: la misma pieza en otra presentación o color).
+    fotos_por_clave: dict[str, list[str]] = {}
+    if MAPA_ACCESORIOS.exists():
+        with open(MAPA_ACCESORIOS, newline="", encoding="utf-8-sig") as f:
+            for fila in csv.DictReader(f):
+                if fila.get("sku") and fila.get("imagen"):
+                    fotos_por_clave.setdefault(fila["imagen"].strip(), []).append(fila["sku"].strip().upper())
+
     # Un código estructural puede figurar en dos tablas del PDF (TC-031 es tubo
     # cuadrado y rectangular): gana la familia que mejor coincide con el nombre.
     def afinidad(r: Recorte, prod: dict) -> int:
@@ -470,7 +481,8 @@ def main() -> int:
         elif r.tipo == "perfil":
             ids = [p["id"] for p in por_matriz.get(r.codigo.upper(), [])]
         elif r.tipo == "accesorio":
-            ids = [por_sku[r.sku_sugerido]["id"]] if r.sku_sugerido in por_sku else []
+            skus = fotos_por_clave.get(r.clave, []) + [r.sku_sugerido]
+            ids = [por_sku[s]["id"] for s in dict.fromkeys(skus) if s in por_sku]
         else:
             ids = []
         if r.clave in finales:              # esquema compartido por una familia
