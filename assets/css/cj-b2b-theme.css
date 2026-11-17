@@ -1177,11 +1177,48 @@ fieldset.cj-campo {
 	margin: 0;
 }
 
-.cj-sim__subir input[type="file"] {
+/* Botón táctil que envuelve al input de archivo (el input queda invisible
+   pero presente: con display:none algunos navegadores no abren el selector). */
+.cj-b2b .cj-sim__subir > .cj-sim__foto-boton {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
 	width: 100%;
-	max-width: 100%;
-	font: inherit;
-	font-size: 13px;
+	min-height: 44px;
+	margin: 0;
+	font-size: 15px;
+	text-align: center;
+	overflow: hidden;
+	cursor: pointer;
+}
+
+.cj-sim__foto-input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.cj-sim__foto-boton:focus-within {
+	outline: 2px solid var(--cj-accent);
+	outline-offset: 2px;
+}
+
+.cj-sim__foto-boton::before {
+	content: "";
+	width: 18px;
+	height: 14px;
+	border: 2px solid currentColor;
+	border-radius: 3px;
+	box-shadow: inset 0 -5px 0 -3px currentColor;
+}
+
+.cj-sim__foto-boton.is-cargando {
+	opacity: 0.7;
+	cursor: progress;
 }
 
 .cj-sim__lineas {
