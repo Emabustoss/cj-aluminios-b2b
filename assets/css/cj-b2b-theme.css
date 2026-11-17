@@ -1825,8 +1825,12 @@ fieldset.cj-campo {
 /* --------------------------------------------- Carrito: vaciar pedido */
 
 .woocommerce-cart a.button.cj-vaciar-pedido {
-	display: inline-block;
-	margin-left: 8px;
+	display: block;
+	box-sizing: border-box;
+	width: 100%;
+	clear: both;
+	margin: 8px 0 0;
+	text-align: center;
 	padding: 10px 16px;
 	border-radius: var(--cj-radius);
 	font-weight: 600;
