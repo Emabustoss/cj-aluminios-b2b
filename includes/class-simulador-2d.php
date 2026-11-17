@@ -58,37 +58,43 @@ class CJB2B_Simulador_2D {
 	 * Tipologías: medidas por defecto en cm y cómo se dibujan.
 	 */
 	public static function tipologias(): array {
+		$t = static function ( string $grupo, string $nombre, string $dibujo, int $ancho, int $alto, int $hojas = 1 ): array {
+			return array(
+				'grupo'  => $grupo,
+				'nombre' => $nombre,
+				'dibujo' => $dibujo,
+				'hojas'  => $hojas,
+				'ancho'  => $ancho,
+				'alto'   => $alto,
+			);
+		};
+
 		return array(
-			'corrediza-2h'  => array(
-				'nombre' => __( 'Ventana corrediza 2 hojas', 'cj-aluminios-b2b' ),
-				'dibujo' => 'corrediza',
-				'ancho'  => 150,
-				'alto'   => 110,
-			),
-			'puerta-balcon' => array(
-				'nombre' => __( 'Puerta balcón corrediza', 'cj-aluminios-b2b' ),
-				'dibujo' => 'balcon',
-				'ancho'  => 180,
-				'alto'   => 205,
-			),
-			'abrir'         => array(
-				'nombre' => __( 'Ventana de abrir / oscilobatiente', 'cj-aluminios-b2b' ),
-				'dibujo' => 'abrir',
-				'ancho'  => 80,
-				'alto'   => 120,
-			),
-			'pano-fijo'     => array(
-				'nombre' => __( 'Paño fijo', 'cj-aluminios-b2b' ),
-				'dibujo' => 'fijo',
-				'ancho'  => 120,
-				'alto'   => 150,
-			),
-			'banderola'     => array(
-				'nombre' => __( 'Banderola / proyectante', 'cj-aluminios-b2b' ),
-				'dibujo' => 'banderola',
-				'ancho'  => 100,
-				'alto'   => 50,
-			),
+			// Corredizas.
+			'corrediza-2h'         => $t( 'corredizas', __( 'Ventana corrediza 2 hojas', 'cj-aluminios-b2b' ), 'corrediza', 150, 110, 2 ),
+			'corrediza-3h'         => $t( 'corredizas', __( 'Ventana corrediza 3 hojas', 'cj-aluminios-b2b' ), 'corrediza', 240, 120, 3 ),
+			'corrediza-4h'         => $t( 'corredizas', __( 'Ventana corrediza 4 hojas', 'cj-aluminios-b2b' ), 'corrediza', 300, 130, 4 ),
+			'corrediza-mosquitera' => $t( 'corredizas', __( 'Corrediza con hoja mosquitera', 'cj-aluminios-b2b' ), 'mosquitera', 150, 110, 2 ),
+			'puerta-balcon'        => $t( 'corredizas', __( 'Puerta balcón corrediza', 'cj-aluminios-b2b' ), 'balcon', 180, 205, 2 ),
+
+			// De abrir / proyectantes.
+			'abrir'                => $t( 'abrir', __( 'Ventana de abrir / oscilobatiente', 'cj-aluminios-b2b' ), 'abrir', 80, 120 ),
+			'banderola'            => $t( 'abrir', __( 'Banderola / proyectante', 'cj-aluminios-b2b' ), 'banderola', 100, 50 ),
+			'vidrio-repartido'     => $t( 'abrir', __( 'Ventana con vidrio repartido', 'cj-aluminios-b2b' ), 'repartido', 120, 120, 2 ),
+
+			// Puertas y fijos.
+			'pano-fijo'            => $t( 'puertas', __( 'Paño fijo', 'cj-aluminios-b2b' ), 'fijo', 120, 150 ),
+			'puerta-rebatir'       => $t( 'puertas', __( 'Puerta de rebatir (1 hoja c/ zócalo)', 'cj-aluminios-b2b' ), 'puerta', 90, 205 ),
+			'fijo-banderola'       => $t( 'puertas', __( 'Paño fijo + banderola superior', 'cj-aluminios-b2b' ), 'fijo-banderola', 120, 200 ),
+		);
+	}
+
+	/** Grupos del selector de tipologías (optgroup): clave => etiqueta. */
+	public static function grupos(): array {
+		return array(
+			'corredizas' => __( 'Corredizas', 'cj-aluminios-b2b' ),
+			'abrir'      => __( 'De abrir / proyectantes', 'cj-aluminios-b2b' ),
+			'puertas'    => __( 'Puertas y fijos', 'cj-aluminios-b2b' ),
 		);
 	}
 
@@ -326,8 +332,14 @@ class CJB2B_Simulador_2D {
 					<p class="cj-campo">
 						<label for="cj-sim-tipologia"><?php esc_html_e( 'Tipología', 'cj-aluminios-b2b' ); ?></label>
 						<select id="cj-sim-tipologia" data-cj-sim-tipologia>
-							<?php foreach ( $tipologias as $clave => $tipologia ) : ?>
-								<option value="<?php echo esc_attr( $clave ); ?>"><?php echo esc_html( $tipologia['nombre'] ); ?></option>
+							<?php foreach ( self::grupos() as $grupo => $etiqueta ) : ?>
+								<optgroup label="<?php echo esc_attr( $etiqueta ); ?>">
+									<?php foreach ( $tipologias as $clave => $tipologia ) : ?>
+										<?php if ( $grupo === $tipologia['grupo'] ) : ?>
+											<option value="<?php echo esc_attr( $clave ); ?>"><?php echo esc_html( $tipologia['nombre'] ); ?></option>
+										<?php endif; ?>
+									<?php endforeach; ?>
+								</optgroup>
 							<?php endforeach; ?>
 						</select>
 					</p>
@@ -341,7 +353,7 @@ class CJB2B_Simulador_2D {
 								<?php ++$i; ?>
 							<?php endforeach; ?>
 						</div>
-						<span class="cj-sim__nota" data-cj-sim-linea-detalle><?php echo esc_html( $lineas['modena']['detalle'] ); ?></span>
+						<span class="cj-sim__nota cj-sim__nota--fuerte" data-cj-sim-linea-detalle><?php echo esc_html( $lineas['modena']['detalle'] ); ?></span>
 					</div>
 
 					<div class="cj-sim__medidas">
@@ -397,6 +409,12 @@ class CJB2B_Simulador_2D {
 					<p class="cj-campo cj-sim__rango">
 						<label for="cj-sim-vidrio"><?php esc_html_e( 'Transparencia del vidrio', 'cj-aluminios-b2b' ); ?></label>
 						<input type="range" id="cj-sim-vidrio" data-cj-sim-vidrio min="0" max="100" step="5" value="60" />
+					</p>
+
+					<p class="cj-campo cj-sim__rango">
+						<label for="cj-sim-luz"><?php esc_html_e( 'Luz / contraste de ambiente', 'cj-aluminios-b2b' ); ?></label>
+						<input type="range" id="cj-sim-luz" data-cj-sim-luz min="0" max="100" step="5" value="50" aria-describedby="cj-sim-luz-nota" />
+						<span class="cj-sim__nota" id="cj-sim-luz-nota"><?php esc_html_e( 'A la izquierda, interior oscuro; a la derecha, fachada a pleno sol.', 'cj-aluminios-b2b' ); ?></span>
 					</p>
 
 					<button type="button" class="cj-btn cj-btn--ghost" data-cj-sim-reset><?php esc_html_e( 'Enderezar y centrar', 'cj-aluminios-b2b' ); ?></button>

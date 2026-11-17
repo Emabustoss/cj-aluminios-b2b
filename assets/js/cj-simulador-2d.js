@@ -6,6 +6,11 @@
  * 2. La deforma en perspectiva hacia las 4 esquinas que acomoda el usuario
  *    (malla de triángulos con homografía) y la compone sobre la foto.
  *
+ * Rendimiento: la foto se reduce una sola vez a un búfer en memoria, los
+ * eventos táctiles solo guardan la posición y el dibujo corre en un único
+ * requestAnimationFrame (bandera needsRender). Mientras se arrastra se dibuja
+ * en calidad rápida y al soltar en calidad completa.
+ *
  * Todo corre en el navegador: la foto del usuario nunca se guarda.
  */
 ( function () {
@@ -32,23 +37,35 @@
 	var capaCtx = capa.getContext( '2d' );
 	var textura = document.createElement( 'canvas' );
 	var texCtx = textura.getContext( '2d' );
+
+	// El vidrio va en su propia textura y capa, siempre opacas: la
+	// transparencia se aplica una sola vez al componer. Deformar píxeles
+	// semitransparentes triángulo a triángulo deja una grilla visible.
+	var texturaVidrio = document.createElement( 'canvas' );
+	var vidCtx = texturaVidrio.getContext( '2d' );
+	var capaVidrio = document.createElement( 'canvas' );
+	var capaVidrioCtx = capaVidrio.getContext( '2d' );
 	var estadoEl = q( '[data-cj-sim-estado]' );
 
-	var MALLA = 14;
+	var MALLA = 14;        // Subdivisión de la deformación en calidad completa.
+	var MALLA_RAPIDA = 7;  // Mientras se arrastra.
 	var TEXTURA_MAX = 720;
 	var LIENZO_MIN = 900;
-	var LIENZO_MAX = 1600;
+	var LIENZO_MAX = 1280; // Lado mayor del búfer de la foto.
+	var RADIO_MOUSE = 16;  // Radio de agarre de las esquinas, en px de pantalla.
+	var RADIO_TACTIL = 28;
 
 	var tipologiaInicial = Object.keys( cfg.tipologias )[ 0 ];
 
 	var estado = {
-		fondo: null,
+		fondo: null, // Canvas en memoria con la foto ya escalada.
 		tipologia: tipologiaInicial,
 		linea: 'modena',
 		tratamiento: cfg.inicial.tratamiento,
 		ancho: cfg.tipologias[ tipologiaInicial ].ancho,
 		alto: cfg.tipologias[ tipologiaInicial ].alto,
 		vidrio: 0.6,
+		luz: 0.5,
 		modo: 'tamano',
 		quad: null,
 		deformado: false,
@@ -104,6 +121,7 @@
 	 * Textura repetible del tratamiento: color pleno (pintados), cepillado
 	 * metálico (anodizados) o veta procedural (símil madera). Se genera con
 	 * la fibra horizontal y una copia girada para los perfiles verticales.
+	 * También define el color de los herrajes que combina con el acabado.
 	 */
 	function material( slug ) {
 		if ( materiales[ slug ] ) {
@@ -116,6 +134,8 @@
 		var c = h.getContext( '2d' );
 		var rnd = azar( slug );
 		var base = rgb( t.hex );
+		var oscuro = luminancia( base ) < 0.45;
+		var herraje;
 		var i, x, y;
 
 		h.width = T;
@@ -153,16 +173,27 @@
 
 				c.stroke();
 			}
+
+			// Sobre madera, herrajes negros mate.
+			herraje = [ '#3d3d40', '#141415' ];
 		} else if ( 'anodizados' === t.familia ) {
 			for ( i = 0; i < 170; i++ ) {
 				c.fillStyle = rgba( rnd() < 0.5 ? [ 255, 255, 255 ] : [ 0, 0, 0 ], 0.03 + rnd() * 0.06 );
 				c.fillRect( 0, rnd() * T, T, 0.5 + rnd() );
 			}
-		} else if ( 'microtex' === t.terminacion ) {
-			for ( i = 0; i < 2600; i++ ) {
-				c.fillStyle = rgba( rnd() < 0.5 ? [ 255, 255, 255 ] : [ 0, 0, 0 ], 0.05 + rnd() * 0.1 );
-				c.fillRect( rnd() * T, rnd() * T, 1.3, 1.3 );
+
+			// Sobre anodizado, herrajes del mismo tono metálico.
+			herraje = [ rgba( aclarar( base, 0.38 ), 1 ), rgba( aclarar( base, -0.28 ), 1 ) ];
+		} else {
+			if ( 'microtex' === t.terminacion ) {
+				for ( i = 0; i < 2600; i++ ) {
+					c.fillStyle = rgba( rnd() < 0.5 ? [ 255, 255, 255 ] : [ 0, 0, 0 ], 0.05 + rnd() * 0.1 );
+					c.fillRect( rnd() * T, rnd() * T, 1.3, 1.3 );
+				}
 			}
+
+			// Pintados: negro sobre colores oscuros, acero sobre claros.
+			herraje = oscuro ? [ '#55565a', '#121213' ] : [ '#eceef0', '#9a9da2' ];
 		}
 
 		var v = document.createElement( 'canvas' );
@@ -178,7 +209,8 @@
 			h: h,
 			v: v,
 			brillo: BRILLO[ t.terminacion ] || 1,
-			oscuro: luminancia( base ) < 0.45
+			oscuro: oscuro,
+			herraje: herraje
 		};
 
 		return materiales[ slug ];
@@ -209,7 +241,20 @@
 		c.closePath();
 	}
 
-	/** Un tramo de perfil: material + sombreado del perfilado + filo. */
+	function rect( x, y, w, h ) {
+		return [ [ x, y ], [ x + w, y ], [ x + w, y + h ], [ x, y + h ] ];
+	}
+
+	function linea( c, x1, y1, x2, y2, estilo, grosor ) {
+		c.beginPath();
+		c.moveTo( x1, y1 );
+		c.lineTo( x2, y2 );
+		c.strokeStyle = estilo;
+		c.lineWidth = grosor || 1;
+		c.stroke();
+	}
+
+	/** Un tramo de perfil: material + sombreado del perfilado + luz de ambiente + filo. */
 	function pieza( c, pts, sentido, g0, g1, mat, perfil, tono ) {
 		var xs = pts.map( function ( p ) { return p[ 0 ]; } );
 		var ys = pts.map( function ( p ) { return p[ 1 ]; } );
@@ -218,6 +263,8 @@
 		var bw = Math.max.apply( null, xs ) - bx;
 		var bh = Math.max.apply( null, ys ) - by;
 		var g = c.createLinearGradient( g0[ 0 ], g0[ 1 ], g1[ 0 ], g1[ 1 ] );
+		var brillo = mat.brillo * ( 0.55 + estado.luz * 0.9 );
+		var ambiente = estado.luz - 0.5;
 
 		c.save();
 		trazar( c, pts );
@@ -227,7 +274,7 @@
 		c.fillRect( bx, by, bw, bh );
 
 		PERFILES[ perfil ].forEach( function ( p ) {
-			g.addColorStop( p[ 0 ], p[ 1 ] ? 'rgba(255,255,255,' + Math.min( 0.9, p[ 2 ] * mat.brillo ) + ')' : 'rgba(0,0,0,' + p[ 2 ] + ')' );
+			g.addColorStop( p[ 0 ], p[ 1 ] ? 'rgba(255,255,255,' + Math.min( 0.9, p[ 2 ] * brillo ) + ')' : 'rgba(0,0,0,' + p[ 2 ] + ')' );
 		} );
 		c.fillStyle = g;
 		c.fillRect( bx, by, bw, bh );
@@ -237,52 +284,128 @@
 			c.fillRect( bx, by, bw, bh );
 		}
 
+		// Luz de ambiente: aclara a pleno sol, oscurece en interiores.
+		if ( ambiente ) {
+			c.fillStyle = ambiente > 0 ? 'rgba(255,255,255,' + ( ambiente * 0.34 ) + ')' : 'rgba(0,0,0,' + ( -ambiente * 0.5 ) + ')';
+			c.fillRect( bx, by, bw, bh );
+		}
+
 		c.restore();
 
 		trazar( c, pts );
-		c.strokeStyle = mat.oscuro ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.32)';
+		c.strokeStyle = mat.oscuro ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.3)';
 		c.lineWidth = 1;
 		c.stroke();
+	}
+
+	/**
+	 * Biselado de un bastidor: filo de luz arriba/izquierda y de sombra
+	 * abajo/derecha en el canto exterior, lo inverso en el rebaje interior
+	 * (el perfil hace sombra hacia el vidrio) y el corte de cada unión.
+	 */
+	function biselar( c, x, y, w, h, t, tb, inglete, mat ) {
+		var x2 = x + w, y2 = y + h;
+		var ix = x + t, iy = y + t, ix2 = x2 - t, iy2 = y2 - tb;
+		var luz = 'rgba(255,255,255,' + ( ( mat.oscuro ? 0.2 : 0.5 ) * ( 0.5 + estado.luz ) ) + ')';
+		var sombra = 'rgba(0,0,0,' + ( 0.3 + estado.luz * 0.25 ) + ')';
+		var grosor = Math.max( 1, t * 0.06 );
+		var juntas = inglete
+			? [ [ x, y, ix, iy ], [ x2, y, ix2, iy ], [ x, y2, ix, iy2 ], [ x2, y2, ix2, iy2 ] ]
+			: [ [ ix, y, ix, iy ], [ ix2, y, ix2, iy ], [ ix, iy2, ix, y2 ], [ ix2, iy2, ix2, y2 ] ];
+
+		c.save();
+		c.lineCap = 'round';
+
+		// Uniones: corte oscuro y, pegado, un hilo de luz (canto del inglete).
+		juntas.forEach( function ( j ) {
+			linea( c, j[ 0 ], j[ 1 ], j[ 2 ], j[ 3 ], 'rgba(0,0,0,0.45)', 1 );
+			linea( c, j[ 0 ] + 1, j[ 1 ], j[ 2 ] + 1, j[ 3 ], luz, 0.8 );
+		} );
+
+		// Canto exterior.
+		linea( c, x + 1, y2 - 1, x + 1, y + 1, luz, grosor );
+		linea( c, x + 1, y + 1, x2 - 1, y + 1, luz, grosor );
+		linea( c, x2 - 1, y + 1, x2 - 1, y2 - 1, sombra, grosor );
+		linea( c, x2 - 1, y2 - 1, x + 1, y2 - 1, sombra, grosor );
+
+		// Rebaje interior.
+		linea( c, ix, iy2, ix, iy, sombra, grosor );
+		linea( c, ix, iy, ix2, iy, sombra, grosor );
+		linea( c, ix2, iy, ix2, iy2, luz, grosor );
+		linea( c, ix2, iy2, ix, iy2, luz, grosor );
+
+		c.restore();
 	}
 
 	/**
 	 * Bastidor de 4 perfiles. t = ancho visto del perfil, tb = ancho del
 	 * travesaño inferior (zócalo). Uniones a 45° (inglete) o a 90°.
 	 */
-	function marco( c, x, y, w, h, t, tb, linea, mat ) {
+	function marco( c, x, y, w, h, t, tb, lin, mat ) {
 		var x2 = x + w;
 		var y2 = y + h;
-		var p = linea.perfil;
+		var p = lin.perfil;
 
-		if ( linea.inglete ) {
+		if ( lin.inglete ) {
 			pieza( c, [ [ x, y ], [ x2, y ], [ x2 - t, y + t ], [ x + t, y + t ] ], 'h', [ 0, y ], [ 0, y + t ], mat, p, 0.05 );
 			pieza( c, [ [ x, y2 ], [ x2, y2 ], [ x2 - t, y2 - tb ], [ x + t, y2 - tb ] ], 'h', [ 0, y2 ], [ 0, y2 - tb ], mat, p, -0.07 );
 			pieza( c, [ [ x, y ], [ x + t, y + t ], [ x + t, y2 - tb ], [ x, y2 ] ], 'v', [ x, 0 ], [ x + t, 0 ], mat, p, 0.03 );
 			pieza( c, [ [ x2, y ], [ x2 - t, y + t ], [ x2 - t, y2 - tb ], [ x2, y2 ] ], 'v', [ x2, 0 ], [ x2 - t, 0 ], mat, p, -0.05 );
-			return;
+		} else {
+			pieza( c, [ [ x + t, y ], [ x2 - t, y ], [ x2 - t, y + t ], [ x + t, y + t ] ], 'h', [ 0, y ], [ 0, y + t ], mat, p, 0.05 );
+			pieza( c, [ [ x + t, y2 - tb ], [ x2 - t, y2 - tb ], [ x2 - t, y2 ], [ x + t, y2 ] ], 'h', [ 0, y2 ], [ 0, y2 - tb ], mat, p, -0.07 );
+			pieza( c, [ [ x, y ], [ x + t, y ], [ x + t, y2 ], [ x, y2 ] ], 'v', [ x, 0 ], [ x + t, 0 ], mat, p, 0.03 );
+			pieza( c, [ [ x2 - t, y ], [ x2, y ], [ x2, y2 ], [ x2 - t, y2 ] ], 'v', [ x2, 0 ], [ x2 - t, 0 ], mat, p, -0.05 );
 		}
 
-		pieza( c, [ [ x + t, y ], [ x2 - t, y ], [ x2 - t, y + t ], [ x + t, y + t ] ], 'h', [ 0, y ], [ 0, y + t ], mat, p, 0.05 );
-		pieza( c, [ [ x + t, y2 - tb ], [ x2 - t, y2 - tb ], [ x2 - t, y2 ], [ x + t, y2 ] ], 'h', [ 0, y2 ], [ 0, y2 - tb ], mat, p, -0.07 );
-		pieza( c, [ [ x, y ], [ x + t, y ], [ x + t, y2 ], [ x, y2 ] ], 'v', [ x, 0 ], [ x + t, 0 ], mat, p, 0.03 );
-		pieza( c, [ [ x2 - t, y ], [ x2, y ], [ x2, y2 ], [ x2 - t, y2 ] ], 'v', [ x2, 0 ], [ x2 - t, 0 ], mat, p, -0.05 );
+		biselar( c, x, y, w, h, t, tb, lin.inglete, mat );
 	}
 
-	/** Vidrio semitransparente con reflejos diagonales y sombra del marco. */
+	/** Opacidad final del vidrio según el slider de transparencia. */
+	function opacidadVidrio() {
+		return 0.92 - estado.vidrio * 0.8;
+	}
+
+	/**
+	 * Oscurece una zona en las dos texturas, solo donde ya hay algo dibujado
+	 * (source-atop): no deja píxeles semitransparentes sueltos.
+	 * estilo: color, o función( ctx ) que devuelve un degradado.
+	 */
+	function velo( x, y, w, h, estilo ) {
+		[ texCtx, vidCtx ].forEach( function ( c ) {
+			c.save();
+			c.globalCompositeOperation = 'source-atop';
+			c.fillStyle = 'function' === typeof estilo ? estilo( c ) : estilo;
+			c.fillRect( x, y, w, h );
+			c.restore();
+		} );
+	}
+
+	/**
+	 * Vidrio con reflejos diagonales y sombra del marco. Se dibuja opaco en
+	 * la textura de vidrio (el primer parámetro se ignora).
+	 */
 	function vidrio( c, x, y, w, h ) {
 		if ( w <= 0 || h <= 0 ) {
 			return;
 		}
 
-		var opacidad = 0.92 - estado.vidrio * 0.8;
-		var reflejo = 0.1 + opacidad * 0.24;
+		c = vidCtx;
+
+		var opacidad = 1;
+		var reflejo = 0.42 * ( 0.45 + estado.luz * 1.1 );
+		var tono = 0.78 + estado.luz * 0.44; // Vidrio más claro a pleno sol.
 		var g = c.createLinearGradient( 0, y, 0, y + h );
 		var sesgo = h * 0.35;
 
+		function color( r, v, a, alfa ) {
+			return 'rgba(' + Math.min( 255, Math.round( r * tono ) ) + ',' + Math.min( 255, Math.round( v * tono ) ) + ',' + Math.min( 255, Math.round( a * tono ) ) + ',' + alfa + ')';
+		}
+
 		function banda( bx, bw, alfa ) {
 			var gb = c.createLinearGradient( 0, y, 0, y + h );
-			gb.addColorStop( 0, 'rgba(255,255,255,' + alfa + ')' );
-			gb.addColorStop( 1, 'rgba(255,255,255,' + alfa * 0.15 + ')' );
+			gb.addColorStop( 0, 'rgba(255,255,255,' + Math.min( 0.85, alfa ) + ')' );
+			gb.addColorStop( 1, 'rgba(255,255,255,' + Math.min( 0.85, alfa ) * 0.15 + ')' );
 			trazar( c, [ [ bx + sesgo, y ], [ bx + sesgo + bw, y ], [ bx + bw, y + h ], [ bx, y + h ] ] );
 			c.fillStyle = gb;
 			c.fill();
@@ -293,9 +416,9 @@
 		c.rect( x, y, w, h );
 		c.clip();
 
-		g.addColorStop( 0, 'rgba(178,209,227,' + opacidad + ')' );
-		g.addColorStop( 0.55, 'rgba(134,170,192,' + opacidad + ')' );
-		g.addColorStop( 1, 'rgba(104,138,160,' + opacidad * 0.95 + ')' );
+		g.addColorStop( 0, color( 178, 209, 227, opacidad ) );
+		g.addColorStop( 0.55, color( 134, 170, 192, opacidad ) );
+		g.addColorStop( 1, color( 104, 138, 160, opacidad ) );
 		c.fillStyle = g;
 		c.fillRect( x, y, w, h );
 
@@ -319,20 +442,81 @@
 		c.restore();
 	}
 
-	/** Hoja: vidrio + bastidor. Si está "atrás" (corrediza) se oscurece apenas. */
-	function hoja( c, x, y, w, h, t, tb, linea, mat, atras ) {
-		vidrio( c, x + t * 0.9, y + t * 0.9, w - t * 1.8, h - t * 0.9 - tb * 0.9 );
-		marco( c, x, y, w, h, t, tb, linea, mat );
+	var patronMalla = null;
 
-		if ( atras ) {
-			c.fillStyle = 'rgba(0,0,0,0.08)';
-			c.fillRect( x, y, w, h );
+	/** Tela mosquitera: velo oscuro + trama fina, sobre la textura de vidrio. */
+	function malla( c, x, y, w, h ) {
+		c = vidCtx;
+
+		if ( ! patronMalla ) {
+			patronMalla = document.createElement( 'canvas' );
+			patronMalla.width = 5;
+			patronMalla.height = 5;
+
+			var cm = patronMalla.getContext( '2d' );
+			cm.fillStyle = 'rgba(28,30,33,0.5)';
+			cm.fillRect( 0, 0, 5, 1 );
+			cm.fillRect( 0, 0, 1, 5 );
+		}
+
+		c.save();
+		c.fillStyle = 'rgba(40,44,48,0.18)';
+		c.fillRect( x, y, w, h );
+		c.fillStyle = c.createPattern( patronMalla, 'repeat' );
+		c.fillRect( x, y, w, h );
+		c.restore();
+	}
+
+	/**
+	 * Hoja: vidrio + bastidor. Opciones:
+	 *  - atras:     hoja de atrás en una corrediza (se oscurece apenas).
+	 *  - palillos:  [ verticales, horizontales ] de vidrio repartido.
+	 *  - travesano: travesaño intermedio, como fracción del alto (0 = sin).
+	 */
+	function hoja( c, x, y, w, h, t, tb, lin, mat, o ) {
+		var p = Math.max( 3, t * 0.3 );
+		var i, px, py;
+
+		o = o || {};
+
+		vidrio( c, x + t * 0.9, y + t * 0.9, w - t * 1.8, h - t * 0.9 - tb * 0.9 );
+
+		if ( o.palillos ) {
+			for ( i = 1; i <= o.palillos[ 0 ]; i++ ) {
+				px = x + t + ( w - t * 2 ) * i / ( o.palillos[ 0 ] + 1 ) - p / 2;
+				pieza( c, rect( px, y + t - 1, p, h - t - tb + 2 ), 'v', [ px, 0 ], [ px + p, 0 ], mat, 'curvo', 0 );
+			}
+
+			for ( i = 1; i <= o.palillos[ 1 ]; i++ ) {
+				py = y + t + ( h - t - tb ) * i / ( o.palillos[ 1 ] + 1 ) - p / 2;
+				pieza( c, rect( x + t - 1, py, w - t * 2 + 2, p ), 'h', [ 0, py ], [ 0, py + p ], mat, 'curvo', 0 );
+			}
+		}
+
+		if ( o.travesano ) {
+			py = y + h * o.travesano - t / 2;
+			pieza( c, rect( x + t - 1, py, w - t * 2 + 2, t ), 'h', [ 0, py ], [ 0, py + t ], mat, lin.perfil, 0 );
+			linea( vidCtx, x + t, py + t + 1, x + w - t, py + t + 1, 'rgba(0,0,0,0.28)', 2 );
+		}
+
+		marco( c, x, y, w, h, t, tb, lin, mat );
+
+		if ( o.atras ) {
+			velo( x, y, w, h, 'rgba(0,0,0,0.08)' );
 		}
 	}
 
-	function herraje( c, x, y, w, h, mat ) {
-		var r = Math.min( w, h ) * 0.3;
+	/* ----------------------------------------------------------- Herrajes */
 
+	/** Pieza metálica redondeada, con degradado del acabado y sombra propia. */
+	function herraje( c, x, y, w, h, mat ) {
+		var r = Math.min( w, h ) * 0.32;
+		var g = w >= h ? c.createLinearGradient( 0, y, 0, y + h ) : c.createLinearGradient( x, 0, x + w, 0 );
+
+		g.addColorStop( 0, mat.herraje[ 0 ] );
+		g.addColorStop( 1, mat.herraje[ 1 ] );
+
+		c.save();
 		c.beginPath();
 		c.moveTo( x + r, y );
 		c.arcTo( x + w, y, x + w, y + h, r );
@@ -340,11 +524,140 @@
 		c.arcTo( x, y + h, x, y, r );
 		c.arcTo( x, y, x + w, y, r );
 		c.closePath();
-		c.fillStyle = mat.oscuro ? '#c9cbcd' : '#27282b';
+		c.shadowColor = 'rgba(0,0,0,0.5)';
+		c.shadowBlur = 3;
+		c.shadowOffsetX = 1;
+		c.shadowOffsetY = 1.5;
+		c.fillStyle = g;
 		c.fill();
-		c.strokeStyle = 'rgba(0,0,0,0.35)';
+		c.shadowColor = 'transparent';
+		c.strokeStyle = 'rgba(0,0,0,0.42)';
 		c.lineWidth = 1;
 		c.stroke();
+		c.restore();
+	}
+
+	/** Tirador / cierre lateral de una hoja corrediza. */
+	function tirador( c, cx, cy, t, mat ) {
+		herraje( c, cx - t * 0.15, cy - t * 0.85, t * 0.3, t * 1.7, mat );
+		herraje( c, cx - t * 0.07, cy - t * 0.5, t * 0.14, t, mat );
+	}
+
+	/** Manija de ventana: base + palanca hacia abajo. */
+	function manija( c, cx, cy, t, mat ) {
+		herraje( c, cx - t * 0.17, cy - t * 0.65, t * 0.34, t * 1.3, mat );
+		herraje( c, cx - t * 0.1, cy - t * 0.1, t * 0.2, t * 1.5, mat );
+	}
+
+	/** Manija horizontal (banderola), centrada en un travesaño. */
+	function manijaHorizontal( c, cx, cy, t, mat ) {
+		herraje( c, cx - t * 0.65, cy - t * 0.16, t * 1.3, t * 0.32, mat );
+		herraje( c, cx - t * 0.1, cy - t * 0.1, t * 1.5, t * 0.2, mat );
+	}
+
+	/** Picaporte de puerta: bocallave + palanca + cilindro. */
+	function picaporte( c, cx, cy, t, mat ) {
+		herraje( c, cx - t * 0.21, cy - t * 1.15, t * 0.42, t * 2.3, mat );
+		herraje( c, cx - t * 1.45, cy - t * 0.62, t * 1.6, t * 0.24, mat );
+		c.beginPath();
+		c.arc( cx, cy + t * 0.55, t * 0.1, 0, Math.PI * 2 );
+		c.fillStyle = 'rgba(0,0,0,0.7)';
+		c.fill();
+	}
+
+	/* ------------------------------------------------- Tipologías (dibujo) */
+
+	/**
+	 * Corredizas de 2, 3 o 4 hojas. En 2 y 3 hojas las hojas se cruzan una
+	 * a una; en 4, las dos centrales van adelante y se encuentran al medio.
+	 */
+	function corredizas( c, W, H, tm, th, lin, mat, n, zocalo, mosquitera ) {
+		var inset = tm * 0.8;
+		var iw = W - inset * 2;
+		var hy = inset;
+		var hh = H - inset * 2;
+		var cy = H / 2;
+		var hojas = [];
+		var a, i;
+
+		if ( 4 === n ) {
+			a = ( iw + th * 2 ) / 4;
+			hojas = [
+				{ x: inset, atras: true },
+				{ x: inset + a - th, atras: false },
+				{ x: inset + a * 2 - th, atras: false },
+				{ x: inset + a * 3 - th * 2, atras: true }
+			];
+		} else {
+			a = ( iw + th * ( n - 1 ) ) / n;
+			for ( i = 0; i < n; i++ ) {
+				hojas.push( { x: inset + i * ( a - th ), atras: 3 === n ? 1 !== i : 0 === i } );
+			}
+		}
+
+		hojas.forEach( function ( hj ) {
+			if ( hj.atras ) {
+				hoja( c, hj.x, hy, a, hh, th, zocalo, lin, mat, { atras: true } );
+			}
+		} );
+
+		// Sombra que cada hoja de adelante proyecta sobre la vecina de atrás.
+		hojas.forEach( function ( hj, k ) {
+			var s = th * 0.32;
+			var gs;
+
+			if ( hj.atras ) {
+				return;
+			}
+
+			if ( hojas[ k - 1 ] && hojas[ k - 1 ].atras ) {
+				velo( hj.x - s, hy, s, hh, function ( cx ) {
+					gs = cx.createLinearGradient( hj.x - s, 0, hj.x, 0 );
+					gs.addColorStop( 0, 'rgba(0,0,0,0)' );
+					gs.addColorStop( 1, 'rgba(0,0,0,0.34)' );
+					return gs;
+				} );
+			}
+
+			if ( hojas[ k + 1 ] && hojas[ k + 1 ].atras ) {
+				velo( hj.x + a, hy, s, hh, function ( cx ) {
+					gs = cx.createLinearGradient( hj.x + a, 0, hj.x + a + s, 0 );
+					gs.addColorStop( 0, 'rgba(0,0,0,0.34)' );
+					gs.addColorStop( 1, 'rgba(0,0,0,0)' );
+					return gs;
+				} );
+			}
+		} );
+
+		hojas.forEach( function ( hj ) {
+			if ( ! hj.atras ) {
+				hoja( c, hj.x, hy, a, hh, th, zocalo, lin, mat );
+			}
+		} );
+
+		if ( mosquitera ) {
+			// Hoja mosquitera superpuesta sobre la primera hoja: bastidor fino + tela.
+			var tmq = th * 0.6;
+			malla( c, hojas[ 0 ].x + tmq * 0.8, hy + tmq * 0.8, a - tmq * 1.6, hh - tmq * 1.6 );
+			marco( c, hojas[ 0 ].x, hy, a, hh, tmq, tmq, lin, mat );
+		}
+
+		marco( c, 0, 0, W, H, tm, tm, lin, mat );
+
+		// Tiradores.
+		if ( mosquitera ) {
+			tirador( c, hojas[ 0 ].x + a - th * 0.3, cy, th * 0.7, mat );
+			tirador( c, hojas[ 1 ].x + a - th / 2, cy, th, mat );
+		} else if ( 2 === n ) {
+			tirador( c, hojas[ 0 ].x + th / 2, cy, th, mat );
+			tirador( c, hojas[ 1 ].x + a - th / 2, cy, th, mat );
+		} else if ( 3 === n ) {
+			tirador( c, hojas[ 1 ].x + th / 2, cy, th, mat );
+			tirador( c, hojas[ 1 ].x + a - th / 2, cy, th, mat );
+		} else {
+			tirador( c, hojas[ 2 ].x - th / 2, cy, th, mat );
+			tirador( c, hojas[ 2 ].x + th / 2, cy, th, mat );
+		}
 	}
 
 	/**
@@ -353,7 +666,7 @@
 	 */
 	function componer() {
 		var tip = cfg.tipologias[ estado.tipologia ];
-		var linea = cfg.lineas[ estado.linea ];
+		var lin = cfg.lineas[ estado.linea ];
 		var mat = material( estado.tratamiento );
 		var razon = estado.ancho / estado.alto;
 		var W = razon >= 1 ? TEXTURA_MAX : Math.round( TEXTURA_MAX * razon );
@@ -362,72 +675,95 @@
 
 		textura.width = Math.max( 40, W );
 		textura.height = Math.max( 40, H );
+		texturaVidrio.width = textura.width;
+		texturaVidrio.height = textura.height;
 		W = textura.width;
 		H = textura.height;
 
 		var escala = W / estado.ancho;
 		var menor = Math.min( W, H );
-		var tm = Math.min( menor * 0.16, Math.max( 5, linea.marco * escala ) );
-		var th = Math.min( menor * 0.2, Math.max( 6, linea.hoja * escala ) );
-		var inset, ancho, zocalo, hx, hy, hw, hh;
+		var tm = Math.min( menor * 0.16, Math.max( 5, lin.marco * escala ) );
+		var th = Math.min( menor * 0.2, Math.max( 6, lin.hoja * escala ) );
+		var inset = tm * 0.55;
+		var hx = inset, hy = inset, hw = W - inset * 2, hh = H - inset * 2;
+		var a, yb, umbral;
 
-		if ( 'fijo' === tip.dibujo ) {
-			vidrio( c, tm * 0.9, tm * 0.9, W - tm * 1.8, H - tm * 1.8 );
-			marco( c, tm * 0.92, tm * 0.92, W - tm * 1.84, H - tm * 1.84, th * 0.3, th * 0.3, linea, mat );
-			marco( c, 0, 0, W, H, tm, tm, linea, mat );
-			return;
+		switch ( tip.dibujo ) {
+			case 'fijo':
+				vidrio( c, tm * 0.9, tm * 0.9, W - tm * 1.8, H - tm * 1.8 );
+				marco( c, tm * 0.92, tm * 0.92, W - tm * 1.84, H - tm * 1.84, th * 0.3, th * 0.3, lin, mat );
+				marco( c, 0, 0, W, H, tm, tm, lin, mat );
+				break;
+
+			case 'corrediza':
+				corredizas( c, W, H, tm, th, lin, mat, tip.hojas, th, false );
+				break;
+
+			case 'mosquitera':
+				corredizas( c, W, H, tm, th, lin, mat, 2, th, true );
+				break;
+
+			case 'balcon':
+				corredizas( c, W, H, tm, th, lin, mat, 2, th * 1.5, false );
+				break;
+
+			case 'banderola':
+				// Bisagras arriba, manija al centro del travesaño inferior.
+				marco( c, 0, 0, W, H, tm, tm, lin, mat );
+				hoja( c, hx, hy, hw, hh, th, th, lin, mat );
+				herraje( c, hx + hw * 0.14, hy - th * 0.12, th * 0.9, th * 0.24, mat );
+				herraje( c, hx + hw * 0.86 - th * 0.9, hy - th * 0.12, th * 0.9, th * 0.24, mat );
+				manijaHorizontal( c, W / 2, hy + hh - th / 2, th, mat );
+				break;
+
+			case 'repartido':
+				// Dos hojas de abrir con palillos; manija en el encuentro central.
+				a = hw / 2;
+				marco( c, 0, 0, W, H, tm, tm, lin, mat );
+				hoja( c, hx, hy, a, hh, th, th, lin, mat, { palillos: [ 1, 2 ] } );
+				hoja( c, hx + a, hy, a, hh, th, th, lin, mat, { palillos: [ 1, 2 ] } );
+				herraje( c, hx - th * 0.12, hy + hh * 0.14, th * 0.24, th * 0.9, mat );
+				herraje( c, hx - th * 0.12, hy + hh * 0.86 - th * 0.9, th * 0.24, th * 0.9, mat );
+				herraje( c, hx + hw - th * 0.12, hy + hh * 0.14, th * 0.24, th * 0.9, mat );
+				herraje( c, hx + hw - th * 0.12, hy + hh * 0.86 - th * 0.9, th * 0.24, th * 0.9, mat );
+				manija( c, hx + a + th / 2, H / 2, th, mat );
+				break;
+
+			case 'puerta':
+				// Marco perimetral con umbral bajo, hoja con zócalo reforzado y travesaño medio.
+				umbral = tm * 0.4;
+				hh = H - inset - umbral * 0.7;
+				marco( c, 0, 0, W, H, tm, umbral, lin, mat );
+				hoja( c, hx, hy, hw, hh, th, th * 2.2, lin, mat, { travesano: 0.52 } );
+				herraje( c, hx - th * 0.12, hy + hh * 0.1, th * 0.24, th * 0.9, mat );
+				herraje( c, hx - th * 0.12, hy + hh * 0.5 - th * 0.45, th * 0.24, th * 0.9, mat );
+				herraje( c, hx - th * 0.12, hy + hh * 0.9 - th * 0.9, th * 0.24, th * 0.9, mat );
+				picaporte( c, hx + hw - th / 2, hy + hh * 0.52, th, mat );
+				break;
+
+			case 'fijo-banderola':
+				// Travesaño horizontal: banderola arriba (30 %), paño fijo abajo.
+				yb = Math.round( H * 0.3 );
+				vidrio( c, tm * 0.9, yb + tm * 0.4, W - tm * 1.8, H - yb - tm * 1.3 );
+				marco( c, tm * 0.92, yb + tm * 0.42, W - tm * 1.84, H - yb - tm * 1.34, th * 0.3, th * 0.3, lin, mat );
+				marco( c, 0, 0, W, H, tm, tm, lin, mat );
+				pieza( c, rect( tm - 1, yb - tm / 2, W - tm * 2 + 2, tm ), 'h', [ 0, yb - tm / 2 ], [ 0, yb + tm / 2 ], mat, lin.perfil, 0 );
+				linea( vidCtx, tm, yb + tm / 2 + 1, W - tm, yb + tm / 2 + 1, 'rgba(0,0,0,0.3)', 2 );
+				hh = yb - tm * 0.5 - inset + tm * 0.45;
+				hoja( c, hx, hy, hw, hh, th, th, lin, mat );
+				herraje( c, hx + hw * 0.14, hy - th * 0.12, th * 0.9, th * 0.24, mat );
+				herraje( c, hx + hw * 0.86 - th * 0.9, hy - th * 0.12, th * 0.9, th * 0.24, mat );
+				manijaHorizontal( c, W / 2, hy + hh - th / 2, th, mat );
+				break;
+
+			default:
+				// Abrir / oscilobatiente: una hoja que pisa el marco, bisagras a la izquierda.
+				marco( c, 0, 0, W, H, tm, tm, lin, mat );
+				hoja( c, hx, hy, hw, hh, th, th, lin, mat );
+				herraje( c, hx - th * 0.12, hy + hh * 0.14, th * 0.24, th * 0.9, mat );
+				herraje( c, hx - th * 0.12, hy + hh * 0.86 - th * 0.9, th * 0.24, th * 0.9, mat );
+				manija( c, hx + hw - th / 2, H / 2, th, mat );
 		}
-
-		if ( 'corrediza' === tip.dibujo || 'balcon' === tip.dibujo ) {
-			inset = tm * 0.8;
-			ancho = ( W - inset * 2 + th ) / 2;
-			zocalo = 'balcon' === tip.dibujo ? th * 1.5 : th;
-			hy = inset;
-			hh = H - inset * 2;
-			hx = W - inset - ancho;
-
-			hoja( c, inset, hy, ancho, hh, th, zocalo, linea, mat, true );
-
-			// Sombra que la hoja de adelante proyecta sobre la de atrás.
-			var gs = c.createLinearGradient( hx - th * 0.3, 0, hx, 0 );
-			gs.addColorStop( 0, 'rgba(0,0,0,0)' );
-			gs.addColorStop( 1, 'rgba(0,0,0,0.32)' );
-			c.fillStyle = gs;
-			c.fillRect( hx - th * 0.3, hy, th * 0.3, hh );
-
-			hoja( c, hx, hy, ancho, hh, th, zocalo, linea, mat, false );
-			marco( c, 0, 0, W, H, tm, tm, linea, mat );
-
-			// Cierres laterales.
-			herraje( c, inset + th * 0.36, H / 2 - th * 0.8, th * 0.28, th * 1.6, mat );
-			herraje( c, W - inset - th * 0.64, H / 2 - th * 0.8, th * 0.28, th * 1.6, mat );
-			return;
-		}
-
-		// Abrir / oscilobatiente y banderola: una hoja que pisa el marco.
-		inset = tm * 0.55;
-		hx = inset;
-		hy = inset;
-		hw = W - inset * 2;
-		hh = H - inset * 2;
-
-		marco( c, 0, 0, W, H, tm, tm, linea, mat );
-		hoja( c, hx, hy, hw, hh, th, th, linea, mat, false );
-
-		if ( 'banderola' === tip.dibujo ) {
-			// Bisagras arriba, manija al centro del travesaño inferior.
-			herraje( c, hx + hw * 0.14, hy - th * 0.12, th * 0.9, th * 0.24, mat );
-			herraje( c, hx + hw * 0.86 - th * 0.9, hy - th * 0.12, th * 0.9, th * 0.24, mat );
-			herraje( c, W / 2 - th * 0.65, hy + hh - th * 0.66, th * 1.3, th * 0.3, mat );
-			herraje( c, W / 2 - th * 0.1, hy + hh - th * 0.66, th * 1.5, th * 0.2, mat );
-			return;
-		}
-
-		// Bisagras a la izquierda, manija a la derecha.
-		herraje( c, hx - th * 0.12, hy + hh * 0.14, th * 0.24, th * 0.9, mat );
-		herraje( c, hx - th * 0.12, hy + hh * 0.86 - th * 0.9, th * 0.24, th * 0.9, mat );
-		herraje( c, hx + hw - th * 0.66, H / 2 - th * 0.65, th * 0.3, th * 1.3, mat );
-		herraje( c, hx + hw - th * 0.61, H / 2 - th * 0.1, th * 0.2, th * 1.5, mat );
 	}
 
 	/* ------------------------------------------- Deformación en perspectiva */
@@ -452,6 +788,27 @@
 		};
 	}
 
+	/**
+	 * Agranda un triángulo desplazando cada lado d píxeles hacia afuera.
+	 * (Mover los vértices desde el centro no alcanza: en la diagonal de cada
+	 * celda el lado casi no se corre y queda una línea más clara.)
+	 */
+	function expandir( pts, d ) {
+		var giro = ( pts[ 1 ][ 0 ] - pts[ 0 ][ 0 ] ) * ( pts[ 2 ][ 1 ] - pts[ 0 ][ 1 ] ) - ( pts[ 2 ][ 0 ] - pts[ 0 ][ 0 ] ) * ( pts[ 1 ][ 1 ] - pts[ 0 ][ 1 ] ) > 0 ? 1 : -1;
+		var normales = pts.map( function ( a, i ) {
+			var b = pts[ ( i + 1 ) % 3 ];
+			var ex = b[ 0 ] - a[ 0 ], ey = b[ 1 ] - a[ 1 ];
+			var largo = Math.sqrt( ex * ex + ey * ey ) || 1;
+			return [ giro * ey / largo, -giro * ex / largo ];
+		} );
+
+		return pts.map( function ( p, i ) {
+			var na = normales[ ( i + 2 ) % 3 ], nb = normales[ i ];
+			var k = Math.max( 0.2, 1 + na[ 0 ] * nb[ 0 ] + na[ 1 ] * nb[ 1 ] );
+			return [ p[ 0 ] + d * ( na[ 0 ] + nb[ 0 ] ) / k, p[ 1 ] + d * ( na[ 1 ] + nb[ 1 ] ) / k ];
+		} );
+	}
+
 	/** Dibuja un triángulo de la imagen con una transformación afín. */
 	function triangulo( c, img, s0, s1, s2, d0, d1, d2 ) {
 		var sx1 = s1[ 0 ] - s0[ 0 ], sy1 = s1[ 1 ] - s0[ 1 ];
@@ -471,37 +828,28 @@
 		var e = d0[ 0 ] - a * s0[ 0 ] - cc * s0[ 1 ];
 		var f = d0[ 1 ] - b * s0[ 0 ] - d * s0[ 1 ];
 
-		// El recorte se agranda 0,7 px para que no queden rendijas entre
-		// triángulos; se limpia antes de dibujar para que el vidrio
-		// semitransparente no se "sume" en los solapes.
-		var cx = ( d0[ 0 ] + d1[ 0 ] + d2[ 0 ] ) / 3;
-		var cy = ( d0[ 1 ] + d1[ 1 ] + d2[ 1 ] ) / 3;
-		var pts = [ d0, d1, d2 ].map( function ( p ) {
-			var vx = p[ 0 ] - cx, vy = p[ 1 ] - cy;
-			var largo = Math.sqrt( vx * vx + vy * vy ) || 1;
-			return [ p[ 0 ] + ( vx / largo ) * 0.7, p[ 1 ] + ( vy / largo ) * 0.7 ];
-		} );
-
+		// El recorte se agranda 1 px por lado para que no queden rendijas
+		// entre triángulos. Las texturas son opacas, así que el solape entre
+		// vecinos no se nota.
 		c.save();
-		trazar( c, pts );
+		trazar( c, expandir( [ d0, d1, d2 ], 1 ) );
 		c.clip();
-		c.clearRect( 0, 0, c.canvas.width, c.canvas.height );
 		c.setTransform( a, b, cc, d, e, f );
 		c.drawImage( img, 0, 0 );
 		c.restore();
 	}
 
-	function deformar( c, img, quad ) {
+	function deformar( c, img, quad, n ) {
 		var H = homografia( quad );
 		var w = img.width, h = img.height;
 		var i, j, u0, u1, v0, v1, p00, p10, p11, p01;
 
-		for ( j = 0; j < MALLA; j++ ) {
-			for ( i = 0; i < MALLA; i++ ) {
-				u0 = i / MALLA;
-				u1 = ( i + 1 ) / MALLA;
-				v0 = j / MALLA;
-				v1 = ( j + 1 ) / MALLA;
+		for ( j = 0; j < n; j++ ) {
+			for ( i = 0; i < n; i++ ) {
+				u0 = i / n;
+				u1 = ( i + 1 ) / n;
+				v0 = j / n;
+				v1 = ( j + 1 ) / n;
 				p00 = H( u0, v0 );
 				p10 = H( u1, v0 );
 				p11 = H( u1, v1 );
@@ -605,29 +953,58 @@
 
 	/* -------------------------------------------------------------- Render */
 
-	var pendiente = false;
+	var arrastre = null;
+	var needsRender = false;
+	var cuadro = 0;
 
+	/**
+	 * Los eventos solo levantan la bandera; el dibujo corre a lo sumo una
+	 * vez por cuadro, así no se acumulan eventos táctiles sin dibujar.
+	 */
 	function pedirRender() {
-		if ( pendiente ) {
+		needsRender = true;
+
+		if ( ! cuadro ) {
+			cuadro = window.requestAnimationFrame( tick );
+		}
+	}
+
+	function tick() {
+		cuadro = 0;
+
+		if ( ! needsRender ) {
 			return;
 		}
 
-		pendiente = true;
-		window.requestAnimationFrame( function () {
-			pendiente = false;
-			render();
-		} );
+		needsRender = false;
+		procesarArrastre();
+		render();
+	}
+
+	/** Dibuja solo la sombra de la capa (la capa se dibuja fuera del lienzo). */
+	function sombra( alfa, desenfoque, dx, dy ) {
+		var lejos = canvas.width * 2;
+
+		ctx.save();
+		ctx.shadowColor = 'rgba(0,0,0,' + alfa + ')';
+		ctx.shadowBlur = desenfoque;
+		ctx.shadowOffsetX = lejos + dx;
+		ctx.shadowOffsetY = dy;
+		ctx.drawImage( capa, -lejos, 0 );
+		ctx.restore();
 	}
 
 	function render() {
 		var W = canvas.width, H = canvas.height;
 		var f = factor();
 		var quad = estado.quad;
+		var rapido = !! arrastre;
 
 		ctx.clearRect( 0, 0, W, H );
 
 		if ( estado.fondo ) {
-			ctx.drawImage( estado.fondo, 0, 0, W, H );
+			// Búfer ya escalado al tamaño del lienzo: copia 1:1, sin reescalar.
+			ctx.drawImage( estado.fondo, 0, 0 );
 		} else {
 			ctx.fillStyle = '#e4e4e7';
 			ctx.fillRect( 0, 0, W, H );
@@ -637,17 +1014,35 @@
 			return;
 		}
 
-		capaCtx.clearRect( 0, 0, W, H );
-		deformar( capaCtx, textura, quad );
+		var malla2 = rapido ? MALLA_RAPIDA : MALLA;
 
-		// Sombra proyectada sobre la pared: la arroja el canal alfa de la capa.
-		ctx.save();
-		ctx.shadowColor = 'rgba(0,0,0,0.45)';
-		ctx.shadowBlur = W * 0.012;
-		ctx.shadowOffsetX = W * 0.004;
-		ctx.shadowOffsetY = W * 0.007;
-		ctx.drawImage( capa, 0, 0 );
-		ctx.restore();
+		// 1) Vidrio opaco deformado; 2) se pasa a la capa con su transparencia;
+		// 3) encima, los perfiles (opacos).
+		capaVidrioCtx.clearRect( 0, 0, W, H );
+		deformar( capaVidrioCtx, texturaVidrio, quad, malla2 );
+
+		capaCtx.clearRect( 0, 0, W, H );
+		capaCtx.globalAlpha = opacidadVidrio();
+		capaCtx.drawImage( capaVidrio, 0, 0 );
+		capaCtx.globalAlpha = 1;
+		deformar( capaCtx, textura, quad, malla2 );
+
+		if ( rapido ) {
+			// Mientras se arrastra: una sola sombra liviana.
+			ctx.save();
+			ctx.shadowColor = 'rgba(0,0,0,0.4)';
+			ctx.shadowBlur = W * 0.006;
+			ctx.shadowOffsetX = W * 0.003;
+			ctx.shadowOffsetY = W * 0.006;
+			ctx.drawImage( capa, 0, 0 );
+			ctx.restore();
+		} else {
+			// Sombra proyectada (amplia y suave) + sombra de contacto (pegada
+			// al perfil). A más luz de ambiente, sombras más marcadas.
+			sombra( 0.26 + estado.luz * 0.24, W * 0.016, W * 0.005, W * 0.009 );
+			sombra( 0.34 + estado.luz * 0.26, W * 0.003, W * 0.0008, W * 0.0018 );
+			ctx.drawImage( capa, 0, 0 );
+		}
 
 		if ( ! estado.guias ) {
 			return;
@@ -691,25 +1086,57 @@
 		estadoEl.textContent = texto;
 	}
 
+	/**
+	 * Copia la imagen a un canvas del tamaño pedido. Si hay que achicar
+	 * mucho (foto de celular), baja de a mitades para no perder nitidez.
+	 */
+	function escalar( img, iw, ih, W, H ) {
+		var origen = img;
+		var cw = iw, ch = ih;
+		var paso, cp;
+
+		while ( cw / 2 > W ) {
+			cw = Math.round( cw / 2 );
+			ch = Math.round( ch / 2 );
+			paso = document.createElement( 'canvas' );
+			paso.width = cw;
+			paso.height = ch;
+			cp = paso.getContext( '2d' );
+			cp.imageSmoothingQuality = 'high';
+			cp.drawImage( origen, 0, 0, cw, ch );
+			origen = paso;
+		}
+
+		var bufer = document.createElement( 'canvas' );
+		var cb = bufer.getContext( '2d' );
+
+		bufer.width = W;
+		bufer.height = H;
+		cb.imageSmoothingQuality = 'high';
+		cb.drawImage( origen, 0, 0, W, H );
+
+		return bufer;
+	}
+
 	function cargarFondo( url, zona, hecho, fallo ) {
 		var img = new Image();
 
 		img.onload = function () {
 			var iw = img.naturalWidth || 1200;
 			var ih = img.naturalHeight || 800;
-			var W = Math.max( LIENZO_MIN, Math.min( LIENZO_MAX, iw ) );
-			var H = Math.round( W * ih / iw );
-
-			if ( H > LIENZO_MAX ) {
-				W = Math.round( W * LIENZO_MAX / H );
-				H = LIENZO_MAX;
-			}
+			var mayor = Math.max( iw, ih );
+			// Lado mayor a 1280 px como máximo; las fotos chicas se llevan a un mínimo usable.
+			var k = Math.min( LIENZO_MAX / mayor, Math.max( 1, LIENZO_MIN / iw ) );
+			var W = Math.max( 1, Math.round( iw * k ) );
+			var H = Math.max( 1, Math.round( ih * k ) );
 
 			canvas.width = W;
 			canvas.height = H;
 			capa.width = W;
 			capa.height = H;
-			estado.fondo = img;
+			capaVidrio.width = W;
+			capaVidrio.height = H;
+			estado.fondo = escalar( img, iw, ih, W, H );
 			estado.deformado = false;
 
 			if ( zona ) {
@@ -832,8 +1259,6 @@
 
 	/* ------------------------------------------------------- Interacción */
 
-	var arrastre = null;
-
 	function posicion( evento ) {
 		var r = canvas.getBoundingClientRect();
 		return [
@@ -842,8 +1267,9 @@
 		];
 	}
 
-	function esquinaCerca( p ) {
-		var radio = 24 * factor();
+	/** Esquina más cercana dentro del radio de agarre (mayor con el dedo). */
+	function esquinaCerca( p, tactil ) {
+		var radio = ( tactil ? RADIO_TACTIL : RADIO_MOUSE ) * factor();
 		var mejor = -1;
 		var minimo = radio * radio;
 
@@ -871,7 +1297,7 @@
 	}
 
 	/** Escala pareja desde un punto fijo: conserva proporción y perspectiva. */
-	function escalar( quad0, ancla, s ) {
+	function escalarQuad( quad0, ancla, s ) {
 		return quad0.map( function ( p ) {
 			return [ ancla[ 0 ] + ( p[ 0 ] - ancla[ 0 ] ) * s, ancla[ 1 ] + ( p[ 1 ] - ancla[ 1 ] ) * s ];
 		} );
@@ -880,49 +1306,23 @@
 	function aplicar( quad ) {
 		if ( valido( quad ) ) {
 			estado.quad = quad;
-			pedirRender();
 			return true;
 		}
 
 		return false;
 	}
 
-	canvas.addEventListener( 'pointerdown', function ( evento ) {
-		if ( ! estado.quad ) {
+	/** Lleva la abertura a la última posición del puntero (una vez por cuadro). */
+	function procesarArrastre() {
+		if ( ! arrastre || ! arrastre.actual ) {
 			return;
 		}
 
-		var p = posicion( evento );
-		var i = esquinaCerca( p );
-
-		if ( i >= 0 ) {
-			arrastre = { tipo: 'esquina', i: i, inicio: p, quad0: copiar( estado.quad ) };
-		} else if ( dentro( p, estado.quad ) ) {
-			arrastre = { tipo: 'mover', inicio: p, quad0: copiar( estado.quad ) };
-		}
-
-		if ( arrastre ) {
-			evento.preventDefault();
-			canvas.setPointerCapture( evento.pointerId );
-			canvas.classList.add( 'is-dragging' );
-		}
-	} );
-
-	canvas.addEventListener( 'pointermove', function ( evento ) {
-		if ( ! estado.quad ) {
-			return;
-		}
-
-		var p = posicion( evento );
-
-		if ( ! arrastre ) {
-			canvas.style.cursor = esquinaCerca( p ) >= 0 ? 'pointer' : ( dentro( p, estado.quad ) ? 'move' : 'default' );
-			return;
-		}
-
-		var dx = p[ 0 ] - arrastre.inicio[ 0 ];
-		var dy = p[ 1 ] - arrastre.inicio[ 1 ];
+		var dx = arrastre.actual[ 0 ] - arrastre.inicio[ 0 ];
+		var dy = arrastre.actual[ 1 ] - arrastre.inicio[ 1 ];
 		var q0 = arrastre.quad0;
+
+		arrastre.actual = null;
 
 		if ( 'mover' === arrastre.tipo ) {
 			aplicar( mover( q0, dx, dy ) );
@@ -944,18 +1344,74 @@
 		var vy = q0[ arrastre.i ][ 1 ] - ancla[ 1 ];
 		var s = ( ( vx + dx ) * vx + ( vy + dy ) * vy ) / ( vx * vx + vy * vy || 1 );
 
-		aplicar( escalar( q0, ancla, Math.max( 0.1, Math.min( 8, s ) ) ) );
+		aplicar( escalarQuad( q0, ancla, Math.max( 0.1, Math.min( 8, s ) ) ) );
+	}
+
+	canvas.addEventListener( 'pointerdown', function ( evento ) {
+		if ( ! estado.quad ) {
+			return;
+		}
+
+		var p = posicion( evento );
+		var i = esquinaCerca( p, 'mouse' !== evento.pointerType );
+
+		if ( i >= 0 ) {
+			arrastre = { tipo: 'esquina', i: i, inicio: p, quad0: copiar( estado.quad ), actual: null };
+		} else if ( dentro( p, estado.quad ) ) {
+			arrastre = { tipo: 'mover', inicio: p, quad0: copiar( estado.quad ), actual: null };
+		}
+
+		if ( arrastre ) {
+			evento.preventDefault();
+			canvas.classList.add( 'is-dragging' );
+
+			try {
+				// Sigue el arrastre aunque el dedo salga del lienzo.
+				canvas.setPointerCapture( evento.pointerId );
+			} catch ( e ) {
+				// Puntero ya inactivo: el arrastre funciona igual dentro del lienzo.
+			}
+		}
+	} );
+
+	canvas.addEventListener( 'pointermove', function ( evento ) {
+		if ( ! estado.quad ) {
+			return;
+		}
+
+		var p = posicion( evento );
+
+		if ( ! arrastre ) {
+			if ( 'mouse' === evento.pointerType ) {
+				canvas.style.cursor = esquinaCerca( p, false ) >= 0 ? 'pointer' : ( dentro( p, estado.quad ) ? 'move' : 'default' );
+			}
+			return;
+		}
+
+		// Solo se guarda la posición: el cálculo y el dibujo van en el próximo cuadro.
+		arrastre.actual = p;
+		pedirRender();
 	} );
 
 	function soltar( evento ) {
-		if ( arrastre ) {
-			arrastre = null;
-			canvas.classList.remove( 'is-dragging' );
+		if ( ! arrastre ) {
+			return;
+		}
 
+		procesarArrastre();
+		arrastre = null;
+		canvas.classList.remove( 'is-dragging' );
+
+		try {
 			if ( canvas.hasPointerCapture( evento.pointerId ) ) {
 				canvas.releasePointerCapture( evento.pointerId );
 			}
+		} catch ( e ) {
+			// Nada que liberar.
 		}
+
+		// Al soltar se vuelve a dibujar en calidad completa.
+		pedirRender();
 	}
 
 	canvas.addEventListener( 'pointerup', soltar );
@@ -973,9 +1429,11 @@
 		if ( teclas[ evento.key ] ) {
 			evento.preventDefault();
 			aplicar( mover( estado.quad, teclas[ evento.key ][ 0 ], teclas[ evento.key ][ 1 ] ) );
+			pedirRender();
 		} else if ( '+' === evento.key || '=' === evento.key || '-' === evento.key ) {
 			evento.preventDefault();
-			aplicar( escalar( estado.quad, centro( estado.quad ), '-' === evento.key ? 0.96 : 1.04 ) );
+			aplicar( escalarQuad( estado.quad, centro( estado.quad ), '-' === evento.key ? 0.96 : 1.04 ) );
+			pedirRender();
 		}
 	} );
 
@@ -992,7 +1450,14 @@
 		}
 
 		var c = centro( estado.quad );
-		estado.quad = rectangulo( c[ 0 ], c[ 1 ], estado.quad[ 1 ][ 0 ] - estado.quad[ 0 ][ 0 ] );
+		var nuevo = rectangulo( c[ 0 ], c[ 1 ], estado.quad[ 1 ][ 0 ] - estado.quad[ 0 ][ 0 ] );
+		var alto = nuevo[ 3 ][ 1 ] - nuevo[ 0 ][ 1 ];
+		var margen = canvas.height * 0.03;
+
+		// Una tipología más alta (puerta) no tiene que salirse de la foto.
+		var cy = Math.max( alto / 2 + margen, Math.min( canvas.height - alto / 2 - margen, c[ 1 ] ) );
+
+		estado.quad = mover( nuevo, 0, cy - c[ 1 ] );
 	}
 
 	function medida( input, respaldo ) {
@@ -1070,11 +1535,28 @@
 		} );
 	} );
 
-	q( '[data-cj-sim-vidrio]' ).addEventListener( 'input', function ( evento ) {
-		estado.vidrio = Math.max( 0, Math.min( 1, parseInt( evento.target.value, 10 ) / 100 ) );
-		componer();
-		pedirRender();
-	} );
+	/** Sliders que cambian la textura: se recompone una vez por cuadro. */
+	function deslizador( selector, clave ) {
+		var pendiente = false;
+
+		q( selector ).addEventListener( 'input', function ( evento ) {
+			estado[ clave ] = Math.max( 0, Math.min( 1, parseInt( evento.target.value, 10 ) / 100 ) );
+
+			if ( pendiente ) {
+				return;
+			}
+
+			pendiente = true;
+			window.requestAnimationFrame( function () {
+				pendiente = false;
+				componer();
+				pedirRender();
+			} );
+		} );
+	}
+
+	deslizador( '[data-cj-sim-vidrio]', 'vidrio' );
+	deslizador( '[data-cj-sim-luz]', 'luz' );
 
 	q( '[data-cj-sim-reset]' ).addEventListener( 'click', function () {
 		estado.deformado = false;
