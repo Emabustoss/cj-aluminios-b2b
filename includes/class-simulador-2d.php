@@ -199,7 +199,8 @@ class CJB2B_Simulador_2D {
 					'fotoBoton'    => __( 'Elegir foto de tu obra', 'cj-aluminios-b2b' ),
 					'fotoCambiar'  => __( 'Cambiar foto', 'cj-aluminios-b2b' ),
 					'ambiente'     => __( 'Ambiente de muestra cargado.', 'cj-aluminios-b2b' ),
-					'enviando'     => __( 'Armando la cotización…', 'cj-aluminios-b2b' ),
+					'enviando'     => __( 'Generando presupuesto…', 'cj-aluminios-b2b' ),
+					'presupuesto'  => __( 'Presupuesto %s generado', 'cj-aluminios-b2b' ),
 					'error'        => __( 'No se pudo completar la operación. Probá de nuevo en unos segundos.', 'cj-aluminios-b2b' ),
 					'archivo'      => __( 'simulador-cj-aluminios', 'cj-aluminios-b2b' ),
 				),
@@ -255,12 +256,12 @@ class CJB2B_Simulador_2D {
 
 				<div class="cj-sim__acciones">
 					<button type="button" class="cj-btn cj-btn--ghost" data-cj-sim-descargar><?php esc_html_e( 'Descargar Vista Previa (.png)', 'cj-aluminios-b2b' ); ?></button>
-					<button type="button" class="cj-btn cj-btn--whatsapp" data-cj-sim-abrir-cotizar aria-expanded="false" aria-controls="cj-sim-cotizar"><?php esc_html_e( 'Cotizar esta Abertura por WhatsApp', 'cj-aluminios-b2b' ); ?></button>
+					<button type="button" class="cj-btn cj-btn--whatsapp" data-cj-sim-abrir-cotizar aria-expanded="false" aria-controls="cj-sim-cotizar"><?php esc_html_e( 'Generar Presupuesto y Enviar por WhatsApp', 'cj-aluminios-b2b' ); ?></button>
 				</div>
 
 				<div class="cj-wa cj-sim__cotizar" id="cj-sim-cotizar" data-cj-sim-cotizar hidden>
 					<form data-cj-sim-form novalidate>
-						<p class="cj-wa__titulo"><?php esc_html_e( 'Cotizar esta abertura', 'cj-aluminios-b2b' ); ?></p>
+						<p class="cj-wa__titulo"><?php esc_html_e( 'Presupuesto de esta abertura', 'cj-aluminios-b2b' ); ?></p>
 						<p class="cj-wa__intro" data-cj-sim-resumen></p>
 
 						<p class="cj-campo">
@@ -284,14 +285,17 @@ class CJB2B_Simulador_2D {
 
 						<p class="cj-aviso cj-aviso--error" data-cj-sim-error role="alert" hidden></p>
 
-						<button type="submit" class="cj-btn cj-btn--whatsapp" data-cj-sim-enviar><?php esc_html_e( 'Enviar cotización por WhatsApp', 'cj-aluminios-b2b' ); ?></button>
+						<button type="submit" class="cj-btn cj-btn--whatsapp" data-cj-sim-enviar><?php esc_html_e( 'Generar Presupuesto y Enviar por WhatsApp', 'cj-aluminios-b2b' ); ?></button>
 						<p class="cj-wa__legal"><?php esc_html_e( 'Descargá la vista previa y adjuntala en el chat: nos ayuda a cotizar más rápido. Medidas aproximadas, a confirmar en obra.', 'cj-aluminios-b2b' ); ?></p>
 					</form>
 
 					<div class="cj-wa__exito" data-cj-sim-exito hidden>
-						<p class="cj-wa__titulo" data-cj-sim-exito-titulo tabindex="-1"><?php esc_html_e( 'Cotización lista', 'cj-aluminios-b2b' ); ?></p>
-						<p><?php esc_html_e( 'Falta un paso: enviá el mensaje por WhatsApp y adjuntá la vista previa descargada.', 'cj-aluminios-b2b' ); ?></p>
-						<a class="cj-btn cj-btn--whatsapp" data-cj-sim-link href="#" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Abrir WhatsApp y enviar', 'cj-aluminios-b2b' ); ?></a>
+						<p class="cj-wa__titulo" data-cj-sim-exito-titulo tabindex="-1"><?php esc_html_e( 'Presupuesto generado', 'cj-aluminios-b2b' ); ?></p>
+						<p><?php esc_html_e( 'Falta un paso: enviá el mensaje por WhatsApp y adjuntá el PDF del presupuesto y la vista previa descargada.', 'cj-aluminios-b2b' ); ?></p>
+						<div class="cj-wa__botones">
+							<a class="cj-btn cj-btn--ghost" data-cj-sim-comprobante href="#" target="_blank" rel="noopener"><?php esc_html_e( 'Ver / descargar presupuesto (PDF)', 'cj-aluminios-b2b' ); ?></a>
+							<a class="cj-btn cj-btn--whatsapp" data-cj-sim-link href="#" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Abrir WhatsApp y enviar', 'cj-aluminios-b2b' ); ?></a>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -482,33 +486,61 @@ class CJB2B_Simulador_2D {
 
 		CJB2B_Frontend::registrar_intento( 'simcot', self::LIMITE_VENTANA );
 
-		$lineas_msj   = array();
-		$lineas_msj[] = '*Cotización de abertura* - Simulador CJ Aluminios';
-		$lineas_msj[] = 'Cliente / Empresa: ' . $nombre;
-		$lineas_msj[] = 'Teléfono: ' . $telefono;
+		$abertura = sprintf(
+			'%1$s | Línea %2$s | %3$s | %4$d x %5$d cm',
+			$tipologias[ $tipologia ]['nombre'],
+			$lineas[ $linea ]['nombre'],
+			CJB2B_Tratamientos_Catalog::nombre_completo( $tratamiento ),
+			$ancho,
+			$alto
+		);
 
-		if ( is_user_logged_in() ) {
-			$lineas_msj[] = 'Lista B2B: ' . CJB2B_Frontend::rol_texto();
+		$cliente = array_merge(
+			CJB2B_Presupuestos_Web::datos_usuario( get_current_user_id() ),
+			array(
+				'nombre'   => $nombre,
+				'telefono' => $telefono,
+			)
+		);
+
+		// La abertura se cotiza a mano: el ítem va "a cotizar", sin precio.
+		$presupuesto = CJB2B_Presupuestos_Web::crear(
+			array(
+				'cliente'     => $cliente,
+				'items'       => array(
+					array(
+						'sku'         => '',
+						'bultos'      => 1,
+						'cantidad'    => 1,
+						'unidad'      => 'u',
+						'descripcion' => $abertura . ( '' !== $observaciones ? ' | Obs.: ' . $observaciones : '' ),
+						'p_unitario'  => 0,
+						'dto'         => 0,
+						'total'       => 0,
+						'resumen'     => $abertura,
+						'detalle_qty' => '1 abertura',
+					),
+				),
+				'subtotal'    => 0,
+				'descuentos'  => 0,
+				'total'       => 0,
+				'con_precios' => false,
+				'origen'      => 'simulador',
+				'lista'       => is_user_logged_in() ? CJB2B_Frontend::rol_texto() : '',
+			)
+		);
+
+		if ( ! $presupuesto ) {
+			wp_send_json_error( array( 'mensaje' => $error ), 500 );
 		}
 
-		$lineas_msj[] = '';
-		$lineas_msj[] = '*Abertura:*';
-		$lineas_msj[] = 'Tipología: ' . $tipologias[ $tipologia ]['nombre'];
-		$lineas_msj[] = 'Línea: ' . $lineas[ $linea ]['nombre'];
-		$lineas_msj[] = 'Tratamiento: ' . CJB2B_Tratamientos_Catalog::nombre_completo( $tratamiento );
-		$lineas_msj[] = sprintf( 'Medidas aprox.: %1$d x %2$d cm (ancho x alto)', $ancho, $alto );
-
-		if ( '' !== $observaciones ) {
-			$lineas_msj[] = '';
-			$lineas_msj[] = 'Observaciones: ' . $observaciones;
-		}
-
-		$lineas_msj[] = '';
-		$lineas_msj[] = '_Adjunto la vista previa del simulador._';
+		$extra = '_Adjunto la vista previa del simulador._' . ( '' !== $observaciones ? "\nObservaciones: " . $observaciones : '' );
 
 		wp_send_json_success(
 			array(
-				'url' => CJB2B_Frontend::whatsapp_url( implode( "\n", $lineas_msj ) ),
+				'url'         => CJB2B_Frontend::whatsapp_url( CJB2B_Presupuestos_Web::mensaje_whatsapp( $presupuesto, $extra ) ),
+				'comprobante' => CJB2B_Presupuestos_Web::url_comprobante( $presupuesto, true ),
+				'numero'      => $presupuesto['numero'],
 			)
 		);
 	}

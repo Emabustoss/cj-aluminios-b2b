@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CJ Aluminios B2B
  * Description: Portal B2B para CJ Aluminios: roles mayoristas, listas de precios y motor de precios dinámico por peso y acabado para perfiles de aluminio.
- * Version: 1.3.0
+ * Version: 1.4.0
  * Author: CJ Aluminios
  * Text Domain: cj-aluminios-b2b
  * Requires Plugins: woocommerce
@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'CJB2B_VERSION', '1.3.0' );
+define( 'CJB2B_VERSION', '1.4.0' );
 define( 'CJB2B_PATH', plugin_dir_path( __FILE__ ) );
 define( 'CJB2B_URL', plugin_dir_url( __FILE__ ) );
 
@@ -51,6 +51,9 @@ final class CJ_Aluminios_B2B {
 
 		// Fase 4: barra de cuenta, pie B2B y enlaces compartidos.
 		require_once CJB2B_PATH . 'includes/class-site-navigation.php';
+
+		// Presupuestos web con numeración propia (WEB-00001).
+		require_once CJB2B_PATH . 'includes/class-presupuestos-web.php';
 	}
 
 	public function init(): void {
@@ -74,6 +77,7 @@ final class CJ_Aluminios_B2B {
 		CJB2B_Institutional_Pages::instance();
 
 		CJB2B_Site_Navigation::instance();
+		CJB2B_Presupuestos_Web::instance();
 	}
 
 	public function aviso_falta_woocommerce(): void {

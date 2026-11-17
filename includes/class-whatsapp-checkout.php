@@ -147,7 +147,7 @@ class CJB2B_WhatsApp_Checkout {
 				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 				'accion'  => self::ACCION,
 				'textos'  => array(
-					'enviando' => __( 'Registrando pedido…', 'cj-aluminios-b2b' ),
+					'enviando' => __( 'Generando presupuesto…', 'cj-aluminios-b2b' ),
 					'error'    => __( 'No se pudo registrar el pedido. Probá de nuevo en unos segundos.', 'cj-aluminios-b2b' ),
 				),
 			)
@@ -179,21 +179,17 @@ class CJB2B_WhatsApp_Checkout {
 
 		$this->formulario_impreso = true;
 
-		$nombre   = '';
-		$telefono = '';
-
-		if ( is_user_logged_in() ) {
-			$usuario  = wp_get_current_user();
-			$empresa  = (string) get_user_meta( $usuario->ID, 'billing_company', true );
-			$nombre   = '' !== $empresa ? $empresa : trim( $usuario->first_name . ' ' . $usuario->last_name );
-			$nombre   = '' !== $nombre ? $nombre : $usuario->display_name;
-			$telefono = (string) get_user_meta( $usuario->ID, 'billing_phone', true );
-		}
+		$perfil    = CJB2B_Presupuestos_Web::datos_usuario( get_current_user_id() );
+		$nombre    = $perfil['nombre'] ?? '';
+		$telefono  = $perfil['telefono'] ?? '';
+		$cuit      = $perfil['cuit'] ?? '';
+		$localidad = $perfil['localidad'] ?? '';
+		$condicion = ( $perfil['condicion_iva'] ?? '' ) ?: 'consumidor_final';
 		?>
 		<div class="cj-b2b cj-wa" data-cj-wa>
 			<form data-cj-wa-form novalidate>
-				<p class="cj-wa__titulo"><?php esc_html_e( 'Enviar pedido / cotización', 'cj-aluminios-b2b' ); ?></p>
-				<p class="cj-wa__intro"><?php esc_html_e( 'Completá tus datos y te abrimos WhatsApp con el pedido ya armado. No se cobra nada online.', 'cj-aluminios-b2b' ); ?></p>
+				<p class="cj-wa__titulo"><?php esc_html_e( 'Generar presupuesto', 'cj-aluminios-b2b' ); ?></p>
+				<p class="cj-wa__intro"><?php esc_html_e( 'Completá tus datos: generamos el presupuesto numerado (WEB-XXXXX), lo abrimos para que lo guardes en PDF y te llevamos a WhatsApp con el pedido armado. No se cobra nada online.', 'cj-aluminios-b2b' ); ?></p>
 
 				<p class="cj-campo">
 					<label for="cj-wa-nombre"><?php esc_html_e( 'Nombre / Empresa', 'cj-aluminios-b2b' ); ?> *</label>
@@ -203,6 +199,26 @@ class CJB2B_WhatsApp_Checkout {
 				<p class="cj-campo">
 					<label for="cj-wa-telefono"><?php esc_html_e( 'Teléfono', 'cj-aluminios-b2b' ); ?> *</label>
 					<input type="tel" id="cj-wa-telefono" name="cj_telefono" value="<?php echo esc_attr( $telefono ); ?>" maxlength="30" autocomplete="tel" inputmode="tel" required />
+				</p>
+
+				<div class="cj-opciones">
+					<p class="cj-campo">
+						<label for="cj-wa-cuit"><?php esc_html_e( 'CUIT / DNI', 'cj-aluminios-b2b' ); ?></label>
+						<input type="text" id="cj-wa-cuit" name="cj_cuit" value="<?php echo esc_attr( $cuit ); ?>" maxlength="20" inputmode="numeric" autocomplete="off" />
+					</p>
+					<p class="cj-campo">
+						<label for="cj-wa-localidad"><?php esc_html_e( 'Localidad', 'cj-aluminios-b2b' ); ?></label>
+						<input type="text" id="cj-wa-localidad" name="cj_localidad" value="<?php echo esc_attr( $localidad ); ?>" maxlength="80" autocomplete="address-level2" />
+					</p>
+				</div>
+
+				<p class="cj-campo">
+					<label for="cj-wa-condicion"><?php esc_html_e( 'Condición frente al IVA', 'cj-aluminios-b2b' ); ?></label>
+					<select id="cj-wa-condicion" name="cj_condicion_iva">
+						<?php foreach ( CJB2B_Presupuestos_Web::condiciones_iva() as $valor => $etiqueta ) : ?>
+							<option value="<?php echo esc_attr( $valor ); ?>" <?php selected( $condicion, $valor ); ?>><?php echo esc_html( $etiqueta ); ?></option>
+						<?php endforeach; ?>
+					</select>
 				</p>
 
 				<fieldset class="cj-campo">
@@ -238,15 +254,18 @@ class CJB2B_WhatsApp_Checkout {
 				<p class="cj-aviso cj-aviso--error" data-cj-wa-error role="alert" hidden></p>
 
 				<button type="submit" class="cj-btn cj-btn--whatsapp" data-cj-wa-enviar>
-					<?php esc_html_e( 'Enviar Pedido / Cotización por WhatsApp', 'cj-aluminios-b2b' ); ?>
+					<?php esc_html_e( 'Generar Presupuesto y Enviar por WhatsApp', 'cj-aluminios-b2b' ); ?>
 				</button>
-				<p class="cj-wa__legal"><?php esc_html_e( 'Precios estimados, sujetos a confirmación por parte de CJ Aluminios.', 'cj-aluminios-b2b' ); ?></p>
+				<p class="cj-wa__legal"><?php esc_html_e( 'Precios estimados, sujetos a confirmación de stock y precio por parte de CJ MET.', 'cj-aluminios-b2b' ); ?></p>
 			</form>
 
 			<div class="cj-wa__exito" data-cj-wa-exito hidden>
 				<p class="cj-wa__titulo" data-cj-wa-exito-titulo tabindex="-1"></p>
-				<p><?php esc_html_e( 'Tu pedido quedó registrado. Falta un paso: enviá el mensaje por WhatsApp para que lo confirmemos.', 'cj-aluminios-b2b' ); ?></p>
-				<a class="cj-btn cj-btn--whatsapp" data-cj-wa-link href="#" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Abrir WhatsApp y enviar', 'cj-aluminios-b2b' ); ?></a>
+				<p><?php esc_html_e( 'El presupuesto quedó registrado. Guardalo en PDF y envialo por WhatsApp (adjuntá el PDF en el chat) para que confirmemos stock y precio.', 'cj-aluminios-b2b' ); ?></p>
+				<div class="cj-wa__botones">
+					<a class="cj-btn cj-btn--ghost" data-cj-wa-comprobante href="#" target="_blank" rel="noopener"><?php esc_html_e( 'Ver / descargar presupuesto (PDF)', 'cj-aluminios-b2b' ); ?></a>
+					<a class="cj-btn cj-btn--whatsapp" data-cj-wa-link href="#" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Abrir WhatsApp y enviar', 'cj-aluminios-b2b' ); ?></a>
+				</div>
 			</div>
 		</div>
 		<?php
@@ -326,6 +345,13 @@ class CJB2B_WhatsApp_Checkout {
 		$entrega       = isset( $_POST['cj_entrega'] ) ? sanitize_key( wp_unslash( $_POST['cj_entrega'] ) ) : 'retiro';
 		$direccion     = isset( $_POST['cj_direccion'] ) ? sanitize_text_field( wp_unslash( $_POST['cj_direccion'] ) ) : '';
 		$observaciones = isset( $_POST['cj_observaciones'] ) ? sanitize_textarea_field( wp_unslash( $_POST['cj_observaciones'] ) ) : '';
+		$cuit          = isset( $_POST['cj_cuit'] ) ? sanitize_text_field( wp_unslash( $_POST['cj_cuit'] ) ) : '';
+		$localidad     = isset( $_POST['cj_localidad'] ) ? sanitize_text_field( wp_unslash( $_POST['cj_localidad'] ) ) : '';
+		$condicion     = isset( $_POST['cj_condicion_iva'] ) ? sanitize_key( wp_unslash( $_POST['cj_condicion_iva'] ) ) : '';
+
+		$cuit      = self::recortar( (string) preg_replace( '/[^0-9\-]/', '', $cuit ), 20 );
+		$localidad = self::recortar( $localidad, 80 );
+		$condicion = isset( CJB2B_Presupuestos_Web::condiciones_iva()[ $condicion ] ) ? $condicion : 'consumidor_final';
 
 		$nombre        = self::recortar( $nombre, 100 );
 		$telefono      = self::recortar( preg_replace( '/[^0-9+()\-\s]/', '', $telefono ), 30 );
@@ -362,22 +388,82 @@ class CJB2B_WhatsApp_Checkout {
 			wp_send_json_error( array( 'mensaje' => __( 'No se pudo registrar el pedido. Probá de nuevo en unos segundos.', 'cj-aluminios-b2b' ) ), 500 );
 		}
 
+		// Presupuesto WEB-XXXXX con los ítems del carrito (antes de vaciarlo).
+		$cliente = array_merge(
+			CJB2B_Presupuestos_Web::datos_usuario( get_current_user_id() ),
+			array_filter(
+				array(
+					'nombre'        => $nombre,
+					'telefono'      => $telefono,
+					'cuit'          => $cuit,
+					'localidad'     => $localidad,
+					'condicion_iva' => $condicion,
+				)
+			)
+		);
+
+		if ( '' !== $direccion ) {
+			$cliente['domicilio'] = $direccion;
+		}
+
+		$carrito     = CJB2B_Presupuestos_Web::desde_carrito();
+		$presupuesto = CJB2B_Presupuestos_Web::crear(
+			array_merge(
+				$carrito,
+				array(
+					'cliente'     => $cliente,
+					'con_precios' => CJB2B_Frontend::precios_visibles(),
+					'origen'      => 'carrito',
+					'pedido_id'   => $pedido->get_id(),
+					'lista'       => CJB2B_Frontend::rol_texto(),
+				)
+			)
+		);
+
+		if ( ! $presupuesto ) {
+			wp_send_json_error( array( 'mensaje' => __( 'No se pudo registrar el presupuesto. Probá de nuevo en unos segundos.', 'cj-aluminios-b2b' ) ), 500 );
+		}
+
+		$pedido->update_meta_data( '_cjb2b_presupuesto', $presupuesto['numero'] );
+		$pedido->save();
+		$pedido->add_order_note( sprintf( __( 'Presupuesto web %s generado.', 'cj-aluminios-b2b' ), $presupuesto['numero'] ) );
+
+		// Los datos fiscales quedan en el perfil para el próximo presupuesto.
+		if ( is_user_logged_in() ) {
+			$uid = get_current_user_id();
+			update_user_meta( $uid, CJB2B_Presupuestos_Web::META_CONDICION, $condicion );
+			if ( '' !== $cuit ) {
+				update_user_meta( $uid, 'cjb2b_cuit', $cuit );
+			}
+			if ( '' !== $localidad ) {
+				update_user_meta( $uid, 'billing_city', $localidad );
+			}
+			if ( '' !== $telefono ) {
+				update_user_meta( $uid, 'billing_phone', $telefono );
+			}
+		}
+
 		$this->registrar_envio();
 
-		$mensaje = $this->armar_mensaje( $pedido, $nombre, $telefono, $entrega, $direccion, $observaciones, $rol );
-		// esc_url_raw() elimina los %0A (saltos de línea) de una URL, así que
-		// se aplica solo a la base; el texto ya queda seguro con rawurlencode().
-		$url = esc_url_raw( 'https://wa.me/' . CJB2B_Frontend::whatsapp_numero() ) . '?text=' . rawurlencode( $mensaje );
+		$extra = 'Entrega: ' . self::entregas()[ $entrega ] . ( '' !== $direccion ? ' - ' . $direccion : '' );
+
+		if ( '' !== $observaciones ) {
+			$extra .= "\nObservaciones: " . $observaciones;
+		}
+
+		$url = CJB2B_Frontend::whatsapp_url( CJB2B_Presupuestos_Web::mensaje_whatsapp( $presupuesto, $extra ) );
 
 		WC()->cart->empty_cart();
 
 		wp_send_json_success(
 			array(
-				'url'    => $url,
-				'titulo' => sprintf(
-					/* translators: %s: número de pedido */
-					__( 'Pedido N° %s registrado', 'cj-aluminios-b2b' ),
-					$pedido->get_order_number()
+				'url'         => $url,
+				'comprobante' => CJB2B_Presupuestos_Web::url_comprobante( $presupuesto, true ),
+				'numero'      => $presupuesto['numero'],
+				'titulo'      => sprintf(
+					/* translators: %s: número de presupuesto */
+					__( 'Presupuesto %s generado', 'cj-aluminios-b2b' ),
+					$presupuesto['numero']
 				),
 			)
 		);
@@ -451,75 +537,6 @@ class CJB2B_WhatsApp_Checkout {
 		);
 
 		return $pedido;
-	}
-
-	/**
-	 * Mensaje de WhatsApp en texto plano (los * son negrita de WhatsApp).
-	 */
-	private function armar_mensaje( WC_Order $pedido, string $nombre, string $telefono, string $entrega, string $direccion, string $observaciones, array $rol ): string {
-		$ver_precios = CJB2B_Frontend::precios_visibles();
-		$lineas      = array();
-
-		$lineas[] = sprintf( '*Pedido / Cotización N° %s* - CJ Aluminios', $pedido->get_order_number() );
-		$lineas[] = 'Cliente / Empresa: ' . $nombre;
-		$lineas[] = 'Teléfono: ' . $telefono;
-		$lineas[] = 'Lista B2B: ' . CJB2B_Frontend::rol_texto();
-		$lineas[] = 'Entrega: ' . self::entregas()[ $entrega ] . ( '' !== $direccion ? ' - ' . $direccion : '' );
-		$lineas[] = '';
-		$lineas[] = '*Detalle:*';
-
-		$n = 0;
-
-		foreach ( $pedido->get_items() as $item ) {
-			$producto = $item->get_product();
-
-			if ( ! $producto instanceof WC_Product ) {
-				continue;
-			}
-
-			++$n;
-
-			$id_padre  = $producto->is_type( 'variation' ) ? $producto->get_parent_id() : $producto->get_id();
-			$es_perfil = $producto->is_type( 'variation' ) && CJB2B_Product_Fields::es_perfil( $id_padre );
-			$sku       = (string) $producto->get_sku();
-			$sku       = '' !== $sku ? $sku : CJB2B_Product_Fields::codigo_matriz( $id_padre );
-			$titulo    = get_the_title( $id_padre );
-			$cantidad  = (int) $item->get_quantity();
-			$acabado   = '';
-
-			if ( $producto->is_type( 'variation' ) ) {
-				$slug    = (string) ( $producto->get_variation_attributes()['attribute_pa_acabado'] ?? '' );
-				$acabado = '' !== $slug ? CJB2B_Frontend::nombre_acabado( $slug ) : '';
-			}
-
-			$unidad = $es_perfil
-				? _n( 'barra', 'barras', $cantidad, 'cj-aluminios-b2b' )
-				: _n( 'unidad', 'unidades', $cantidad, 'cj-aluminios-b2b' );
-
-			$linea = $n . '. '
-				. ( '' !== $sku ? '[' . $sku . '] ' : '' )
-				. wp_strip_all_tags( $titulo )
-				. ( '' !== $acabado ? ' - ' . $acabado : '' )
-				. ' x ' . $cantidad . ' ' . $unidad;
-
-			if ( $ver_precios ) {
-				$linea .= ' = ' . CJB2B_Frontend::precio_texto( (float) $item->get_total() );
-			}
-
-			$lineas[] = $linea;
-		}
-
-		$lineas[] = '';
-		$lineas[] = $ver_precios
-			? '*Total estimado: ' . CJB2B_Frontend::precio_texto( (float) $pedido->get_total() ) . '*'
-			: '*Total: a cotizar*';
-
-		if ( '' !== $observaciones ) {
-			$lineas[] = '';
-			$lineas[] = 'Observaciones: ' . $observaciones;
-		}
-
-		return implode( "\n", $lineas );
 	}
 
 	/* -------------------------------------------------------------- Admin */
