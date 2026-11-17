@@ -1118,10 +1118,20 @@
 		return bufer;
 	}
 
+	var cargaActual = 0;
+
 	function cargarFondo( url, zona, hecho, fallo ) {
 		var img = new Image();
+		var id = ++cargaActual;
+
+		img.decoding = 'async';
 
 		img.onload = function () {
+			// Si mientras tanto se pidió otro fondo, esta carga ya no vale.
+			if ( id !== cargaActual ) {
+				return;
+			}
+
 			var iw = img.naturalWidth || 1200;
 			var ih = img.naturalHeight || 800;
 			var mayor = Math.max( iw, ih );
@@ -1156,6 +1166,10 @@
 		};
 
 		img.onerror = function () {
+			if ( id !== cargaActual ) {
+				return;
+			}
+
 			if ( fallo ) {
 				fallo();
 			}
@@ -1197,65 +1211,148 @@
 
 	/* ------------------------------------------------- Foto de obra propia */
 
+	/*
+	 * Todo pasa en el navegador: la foto nunca se sube. Así no hay espera de
+	 * red (antes se congelaba en "Verificando la foto…" con conexiones lentas)
+	 * y funciona igual con el Photo Picker de Android y con la galería de iOS.
+	 */
 	var inputFoto = q( '[data-cj-sim-foto]' );
+	var botonFoto = inputFoto ? inputFoto.closest( 'label' ) : null;
+	var textoFoto = q( '[data-cj-sim-foto-texto]' );
+	var ultimaFoto = null; // Último File procesado (evita repetir con "change" + "input").
 
-	inputFoto.addEventListener( 'change', function () {
-		var archivo = inputFoto.files && inputFoto.files[ 0 ];
+	function esHeic( archivo ) {
+		return /hei[cf]/i.test( archivo.type || '' ) || /\.hei[cf]$/i.test( archivo.name || '' );
+	}
 
-		if ( ! archivo ) {
+	function cargandoFoto( si ) {
+		if ( botonFoto ) {
+			botonFoto.classList.toggle( 'is-cargando', si );
+			botonFoto.setAttribute( 'aria-busy', si ? 'true' : 'false' );
+		}
+	}
+
+	/** Lee el archivo como data: URL (respaldo si la URL de objeto falla). */
+	function leerComoDataUrl( archivo, listo, fallo ) {
+		if ( ! window.FileReader ) {
+			fallo();
 			return;
 		}
 
-		// Validación en el navegador (rápida); la del servidor es la que manda.
-		if ( cfg.mimes.indexOf( archivo.type ) < 0 ) {
+		var lector = new FileReader();
+
+		lector.onload = function () {
+			listo( String( lector.result || '' ) );
+		};
+
+		lector.onerror = fallo;
+
+		try {
+			lector.readAsDataURL( archivo );
+		} catch ( e ) {
+			fallo();
+		}
+	}
+
+	function fotoLista( archivo ) {
+		cargandoFoto( false );
+		marcarAmbiente( '' );
+		if ( textoFoto ) {
+			textoFoto.textContent = cfg.textos.fotoCambiar;
+		}
+		decir( cfg.textos.fotoLista );
+		// Recién ahora se limpia el input: elegir la misma foto otra vez vuelve a disparar "change".
+		inputFoto.value = '';
+	}
+
+	function fotoFallida( archivo ) {
+		cargandoFoto( false );
+		inputFoto.value = '';
+		ultimaFoto = null;
+		decir( esHeic( archivo ) || ! archivo.type ? cfg.textos.fotoHeic : cfg.textos.fotoError );
+	}
+
+	/** Intenta con URL de objeto; si no se puede decodificar, reintenta con FileReader. */
+	function abrirFoto( archivo ) {
+		var url = '';
+
+		function conDataUrl() {
+			leerComoDataUrl( archivo, function ( dataUrl ) {
+				if ( ! dataUrl ) {
+					fotoFallida( archivo );
+					return;
+				}
+
+				cargarFondo( dataUrl, null, function () {
+					fotoLista( archivo );
+				}, function () {
+					fotoFallida( archivo );
+				} );
+			}, function () {
+				fotoFallida( archivo );
+			} );
+		}
+
+		try {
+			url = ( window.URL && URL.createObjectURL ) ? URL.createObjectURL( archivo ) : '';
+		} catch ( e ) {
+			url = '';
+		}
+
+		if ( ! url ) {
+			conDataUrl();
+			return;
+		}
+
+		cargarFondo( url, null, function () {
+			URL.revokeObjectURL( url );
+			fotoLista( archivo );
+		}, function () {
+			URL.revokeObjectURL( url );
+			conDataUrl();
+		} );
+	}
+
+	function alElegirFoto( evento ) {
+		var lista = ( evento && evento.target && evento.target.files ) || inputFoto.files;
+		// Se guarda la referencia al File antes de tocar el input o el DOM.
+		var archivo = lista && lista[ 0 ] ? lista[ 0 ] : null;
+
+		if ( ! archivo || archivo === ultimaFoto ) {
+			return;
+		}
+
+		ultimaFoto = archivo;
+
+		// Algunos selectores de Android entregan el archivo sin tipo: se intenta igual.
+		if ( archivo.type && 0 !== archivo.type.indexOf( 'image/' ) ) {
+			ultimaFoto = null;
 			inputFoto.value = '';
 			decir( cfg.textos.fotoTipo );
 			return;
 		}
 
 		if ( archivo.size > cfg.maxBytes ) {
+			ultimaFoto = null;
 			inputFoto.value = '';
 			decir( cfg.textos.fotoPeso );
 			return;
 		}
 
+		cargandoFoto( true );
 		decir( cfg.textos.fotoSubiendo );
-		inputFoto.disabled = true;
 
-		var cuerpo = new FormData();
-		cuerpo.append( 'action', cfg.accionFoto );
-		cuerpo.append( 'nonce', cfg.nonce );
-		cuerpo.append( 'foto', archivo );
+		// Un respiro para que se pinte el estado antes de decodificar la foto.
+		window.setTimeout( function () {
+			abrirFoto( archivo );
+		}, 30 );
+	}
 
-		fetch( cfg.ajaxUrl, {
-			method: 'POST',
-			credentials: 'same-origin',
-			body: cuerpo
-		} ).then( function ( respuesta ) {
-			return respuesta.json();
-		} ).then( function ( json ) {
-			if ( ! json || ! json.success ) {
-				throw new Error( ( json && json.data && json.data.mensaje ) || cfg.textos.fotoError );
-			}
-
-			var url = URL.createObjectURL( archivo );
-
-			cargarFondo( url, null, function () {
-				URL.revokeObjectURL( url );
-				marcarAmbiente( '' );
-				decir( cfg.textos.fotoLista );
-			}, function () {
-				URL.revokeObjectURL( url );
-				inputFoto.value = '';
-				decir( cfg.textos.fotoError );
-			} );
-		} ).catch( function ( error ) {
-			inputFoto.value = '';
-			decir( ( error && error.message && 'Failed to fetch' !== error.message ) ? error.message : cfg.textos.fotoError );
-		} ).then( function () {
-			inputFoto.disabled = false;
-		} );
-	} );
+	if ( inputFoto ) {
+		inputFoto.addEventListener( 'change', alElegirFoto );
+		// Respaldo: algunos navegadores móviles avisan por "input" y no por "change".
+		inputFoto.addEventListener( 'input', alElegirFoto );
+	}
 
 	/* ------------------------------------------------------- Interacción */
 

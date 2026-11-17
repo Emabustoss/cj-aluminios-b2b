@@ -3,10 +3,10 @@
  * Fase 3: simulador visual 2D de aberturas sobre una foto de ambiente.
  *
  * Shortcode [cj_simulador_2d]. Todo el dibujo corre en el navegador (Canvas,
- * assets/js/cj-simulador-2d.js): no usa IA ni servicios pagos. El servidor
- * solo hace dos cosas:
- *  - valida la foto subida (tamaño y tipo real) y la descarta: nunca se guarda;
- *  - arma el enlace de WhatsApp de la cotización (honeypot + rate limiting).
+ * assets/js/cj-simulador-2d.js): no usa IA ni servicios pagos. La foto de
+ * obra del cliente se abre, se valida y se reduce en el navegador: nunca se
+ * sube al servidor. El servidor solo arma el enlace de WhatsApp de la
+ * cotización (honeypot + rate limiting).
  *
  * La paleta sale de CJB2B_Tratamientos_Catalog (única fuente).
  */
@@ -21,15 +21,12 @@ class CJB2B_Simulador_2D {
 
 	const SHORTCODE      = 'cj_simulador_2d';
 	const NONCE          = 'cjb2b_simulador';
-	const ACCION_FOTO    = 'cjb2b_sim_validar_foto';
 	const ACCION_COTIZAR = 'cjb2b_sim_cotizar';
 	const SCRIPT_HANDLE  = 'cj-simulador-2d';
 
-	const FOTO_MAX_BYTES = 5 * MB_IN_BYTES;
-	const FOTO_MIN_LADO  = 200;
-	const FOTO_MAX_LADO  = 12000;
+	// Tope de la foto de obra (se controla en el navegador; no se sube).
+	const FOTO_MAX_BYTES = 15 * MB_IN_BYTES;
 
-	const LIMITE_FOTOS      = 30;
 	const LIMITE_COTIZAR    = 5;
 	const LIMITE_VENTANA    = 10 * MINUTE_IN_SECONDS;
 	const MEDIDA_MIN_CM     = 20;
@@ -46,8 +43,6 @@ class CJB2B_Simulador_2D {
 		add_shortcode( self::SHORTCODE, array( $this, 'render_shortcode' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'registrar_script' ) );
 
-		add_action( 'wp_ajax_' . self::ACCION_FOTO, array( $this, 'ajax_validar_foto' ) );
-		add_action( 'wp_ajax_nopriv_' . self::ACCION_FOTO, array( $this, 'ajax_validar_foto' ) );
 		add_action( 'wp_ajax_' . self::ACCION_COTIZAR, array( $this, 'ajax_cotizar' ) );
 		add_action( 'wp_ajax_nopriv_' . self::ACCION_COTIZAR, array( $this, 'ajax_cotizar' ) );
 	}
@@ -161,15 +156,6 @@ class CJB2B_Simulador_2D {
 		);
 	}
 
-	/** Tipos de imagen aceptados: extensiones => MIME real. */
-	public static function mimes_permitidos(): array {
-		return array(
-			'jpg|jpeg|jpe' => 'image/jpeg',
-			'png'          => 'image/png',
-			'webp'         => 'image/webp',
-		);
-	}
-
 	/* ------------------------------------------------------------- Assets */
 
 	public function registrar_script(): void {
@@ -191,10 +177,8 @@ class CJB2B_Simulador_2D {
 			array(
 				'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
 				'nonce'         => wp_create_nonce( self::NONCE ),
-				'accionFoto'    => self::ACCION_FOTO,
 				'accionCotizar' => self::ACCION_COTIZAR,
 				'maxBytes'      => self::FOTO_MAX_BYTES,
-				'mimes'         => array_values( self::mimes_permitidos() ),
 				'medidaMin'     => self::MEDIDA_MIN_CM,
 				'medidaMax'     => self::MEDIDA_MAX_CM,
 				'tratamientos'  => CJB2B_Tratamientos_Catalog::para_js(),
@@ -206,11 +190,14 @@ class CJB2B_Simulador_2D {
 					'ambiente'    => 'living',
 				),
 				'textos'        => array(
-					'fotoTipo'     => __( 'Formato no admitido. Subí una foto JPG, PNG o WebP.', 'cj-aluminios-b2b' ),
-					'fotoPeso'     => __( 'La foto supera los 5 MB. Probá con una más liviana.', 'cj-aluminios-b2b' ),
-					'fotoSubiendo' => __( 'Verificando la foto…', 'cj-aluminios-b2b' ),
-					'fotoLista'    => __( 'Foto cargada. Arrastrá la abertura hasta su lugar.', 'cj-aluminios-b2b' ),
-					'fotoError'    => __( 'No se pudo cargar la foto. Probá con otra imagen.', 'cj-aluminios-b2b' ),
+					'fotoTipo'     => __( 'Ese archivo no es una imagen. Elegí una foto JPG, PNG o WebP.', 'cj-aluminios-b2b' ),
+					'fotoPeso'     => __( 'La foto supera los 15 MB. Probá con una más liviana.', 'cj-aluminios-b2b' ),
+					'fotoSubiendo' => __( 'Procesando foto…', 'cj-aluminios-b2b' ),
+					'fotoLista'    => __( 'Foto cargada: arrastrá las esquinas para ajustar la abertura.', 'cj-aluminios-b2b' ),
+					'fotoError'    => __( 'No se pudo abrir la foto. Probá con otra imagen JPG o PNG.', 'cj-aluminios-b2b' ),
+					'fotoHeic'     => __( 'Este formato de foto (HEIC) no es compatible directamente. Sacá una captura de pantalla de la foto o elegí una imagen JPG/PNG.', 'cj-aluminios-b2b' ),
+					'fotoBoton'    => __( 'Elegir foto de tu obra', 'cj-aluminios-b2b' ),
+					'fotoCambiar'  => __( 'Cambiar foto', 'cj-aluminios-b2b' ),
 					'ambiente'     => __( 'Ambiente de muestra cargado.', 'cj-aluminios-b2b' ),
 					'enviando'     => __( 'Armando la cotización…', 'cj-aluminios-b2b' ),
 					'error'        => __( 'No se pudo completar la operación. Probá de nuevo en unos segundos.', 'cj-aluminios-b2b' ),
@@ -320,11 +307,19 @@ class CJB2B_Simulador_2D {
 							</button>
 						<?php endforeach; ?>
 					</div>
-					<p class="cj-campo cj-sim__subir">
-						<label for="cj-sim-foto"><?php esc_html_e( 'O subí una foto de tu obra', 'cj-aluminios-b2b' ); ?></label>
-						<input type="file" id="cj-sim-foto" data-cj-sim-foto accept="image/jpeg,image/png,image/webp" />
-						<span class="cj-sim__nota"><?php esc_html_e( 'JPG, PNG o WebP, hasta 5 MB. La foto no se guarda en el servidor.', 'cj-aluminios-b2b' ); ?></span>
-					</p>
+					<div class="cj-campo cj-sim__subir">
+						<span class="cj-sim__label"><?php esc_html_e( 'O usá una foto de tu obra', 'cj-aluminios-b2b' ); ?></span>
+						<?php
+						// El input va DENTRO del label: el toque abre el selector nativo
+						// sin JS de por medio (clave en iOS y en el Photo Picker de
+						// Android). Sin "capture" para que ofrezca galería y cámara.
+						?>
+						<label class="cj-btn cj-btn--ghost cj-sim__foto-boton">
+							<input type="file" class="cj-sim__foto-input" data-cj-sim-foto accept="image/*" />
+							<span data-cj-sim-foto-texto><?php esc_html_e( 'Elegir foto de tu obra', 'cj-aluminios-b2b' ); ?></span>
+						</label>
+						<span class="cj-sim__nota"><?php esc_html_e( 'JPG, PNG o WebP, hasta 15 MB. La foto se procesa en tu dispositivo: no se sube ni se guarda.', 'cj-aluminios-b2b' ); ?></span>
+					</div>
 				</fieldset>
 
 				<fieldset class="cj-sim__grupo">
@@ -423,127 +418,6 @@ class CJB2B_Simulador_2D {
 		</div>
 		<?php
 		return (string) ob_get_clean();
-	}
-
-	/* ------------------------------------------------------ Foto de obra */
-
-	/**
-	 * Valida un archivo de $_FILES como foto admitida: subida real por HTTP,
-	 * hasta 5 MB y con tipo MIME real JPG/PNG/WebP (por contenido, no por
-	 * extensión). Devuelve el MIME y las dimensiones, o un WP_Error.
-	 *
-	 * @param mixed $archivo Entrada de $_FILES.
-	 * @return array{mime:string,ancho:int,alto:int}|WP_Error
-	 */
-	public static function validar_foto( $archivo ) {
-		$generico = new WP_Error( 'cjb2b_foto', __( 'No se pudo leer la foto. Probá con otra imagen.', 'cj-aluminios-b2b' ) );
-		$pesada   = new WP_Error( 'cjb2b_foto_peso', __( 'La foto supera los 5 MB. Probá con una más liviana.', 'cj-aluminios-b2b' ) );
-		$tipo     = new WP_Error( 'cjb2b_foto_tipo', __( 'Formato no admitido. Subí una foto JPG, PNG o WebP.', 'cj-aluminios-b2b' ) );
-
-		if ( ! is_array( $archivo ) || ! isset( $archivo['tmp_name'], $archivo['error'], $archivo['name'] )
-			|| is_array( $archivo['tmp_name'] )
-		) {
-			return $generico;
-		}
-
-		$codigo = (int) $archivo['error'];
-
-		if ( UPLOAD_ERR_INI_SIZE === $codigo || UPLOAD_ERR_FORM_SIZE === $codigo ) {
-			return $pesada;
-		}
-
-		$tmp = (string) $archivo['tmp_name'];
-
-		if ( UPLOAD_ERR_OK !== $codigo || '' === $tmp || ! is_uploaded_file( $tmp ) ) {
-			return $generico;
-		}
-
-		$bytes = (int) filesize( $tmp );
-
-		if ( $bytes <= 0 ) {
-			return $generico;
-		}
-
-		if ( $bytes > self::FOTO_MAX_BYTES ) {
-			return $pesada;
-		}
-
-		$permitidos = array_values( self::mimes_permitidos() );
-		$nombre     = sanitize_file_name( wp_unslash( (string) $archivo['name'] ) );
-
-		// 1) Extensión + contenido según WordPress.
-		$chequeo = wp_check_filetype_and_ext( $tmp, $nombre, self::mimes_permitidos() );
-
-		if ( empty( $chequeo['ext'] ) || empty( $chequeo['type'] ) || ! in_array( $chequeo['type'], $permitidos, true ) ) {
-			return $tipo;
-		}
-
-		// 2) MIME real por firma del archivo.
-		if ( ! function_exists( 'finfo_open' ) ) {
-			return $generico;
-		}
-
-		$finfo = finfo_open( FILEINFO_MIME_TYPE );
-		$real  = $finfo ? (string) finfo_file( $finfo, $tmp ) : '';
-
-		if ( $finfo ) {
-			finfo_close( $finfo );
-		}
-
-		if ( ! in_array( $real, $permitidos, true ) ) {
-			return $tipo;
-		}
-
-		// 3) Tiene que ser una imagen decodificable y de tamaño razonable.
-		$info = wp_getimagesize( $tmp );
-
-		if ( ! is_array( $info ) || empty( $info['mime'] ) || ! in_array( $info['mime'], $permitidos, true ) ) {
-			return $tipo;
-		}
-
-		$ancho = (int) $info[0];
-		$alto  = (int) $info[1];
-
-		if ( min( $ancho, $alto ) < self::FOTO_MIN_LADO || max( $ancho, $alto ) > self::FOTO_MAX_LADO ) {
-			return new WP_Error(
-				'cjb2b_foto_dim',
-				sprintf(
-					/* translators: 1: lado mínimo en px, 2: lado máximo en px */
-					__( 'La foto tiene que medir entre %1$d y %2$d píxeles por lado.', 'cj-aluminios-b2b' ),
-					self::FOTO_MIN_LADO,
-					self::FOTO_MAX_LADO
-				)
-			);
-		}
-
-		return array(
-			'mime'  => $real,
-			'ancho' => $ancho,
-			'alto'  => $alto,
-		);
-	}
-
-	/**
-	 * Valida la foto y responde. El archivo NO se mueve ni se guarda: PHP
-	 * borra el temporal al terminar la request y el navegador usa su copia.
-	 */
-	public function ajax_validar_foto(): void {
-		check_ajax_referer( self::NONCE, 'nonce' );
-
-		if ( CJB2B_Frontend::limite_superado( 'simfoto', self::LIMITE_FOTOS ) ) {
-			wp_send_json_error( array( 'mensaje' => __( 'Subiste demasiadas fotos seguidas. Esperá unos minutos y probá de nuevo.', 'cj-aluminios-b2b' ) ), 429 );
-		}
-
-		CJB2B_Frontend::registrar_intento( 'simfoto', self::LIMITE_VENTANA );
-
-		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- se valida campo por campo en validar_foto().
-		$resultado = self::validar_foto( $_FILES['foto'] ?? null );
-
-		if ( is_wp_error( $resultado ) ) {
-			wp_send_json_error( array( 'mensaje' => $resultado->get_error_message() ), 400 );
-		}
-
-		wp_send_json_success( $resultado );
 	}
 
 	/* --------------------------------------------------------- Cotización */
