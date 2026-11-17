@@ -183,7 +183,7 @@ class CJB2B_Catalog_UI {
 
 		ob_start();
 		?>
-		<div class="cj-b2b cj-catalogo-wrap alignwide"><div class="cj-catalogo" data-cj-catalogo data-linea="<?php echo esc_attr( $linea ); ?>" data-familia="<?php echo esc_attr( $familia ); ?>" data-paginas="<?php echo esc_attr( (string) $resultado['paginas'] ); ?>">
+		<div class="cj-b2b cj-catalogo-wrap alignwide"><div class="cj-catalogo cj-catalogo--grilla" data-cj-catalogo data-linea="<?php echo esc_attr( $linea ); ?>" data-familia="<?php echo esc_attr( $familia ); ?>" data-paginas="<?php echo esc_attr( (string) $resultado['paginas'] ); ?>">
 			<div class="cj-catalogo__barra">
 				<span class="cj-rol">
 					<?php esc_html_e( 'Lista aplicada:', 'cj-aluminios-b2b' ); ?>
@@ -212,7 +212,13 @@ class CJB2B_Catalog_UI {
 			</div>
 
 			<p class="cj-aviso" data-cj-aviso role="status" aria-live="polite" hidden></p>
-			<p class="cj-catalogo__estado" data-cj-estado aria-live="polite"><?php echo esc_html( $this->texto_total( $resultado['total'] ) ); ?></p>
+			<div class="cj-catalogo__resumen">
+				<p class="cj-catalogo__estado" data-cj-estado aria-live="polite"><?php echo esc_html( $this->texto_total( $resultado['total'] ) ); ?></p>
+				<div class="cj-vista" role="group" aria-label="<?php esc_attr_e( 'Vista del catálogo', 'cj-aluminios-b2b' ); ?>" data-cj-vista>
+					<button type="button" class="cj-chip" data-vista="lista" aria-pressed="false"><?php esc_html_e( 'Lista', 'cj-aluminios-b2b' ); ?></button>
+					<button type="button" class="cj-chip is-active" data-vista="grilla" aria-pressed="true"><?php esc_html_e( 'Cuadrícula', 'cj-aluminios-b2b' ); ?></button>
+				</div>
+			</div>
 
 			<table class="cj-tabla">
 				<thead>
@@ -533,8 +539,9 @@ class CJB2B_Catalog_UI {
 
 			// Nombre.
 			// Miniatura (plano del catálogo o placeholder neutro) + nombre.
+			// Tamaño de tienda (300 px): alcanza para la foto grande de la cuadrícula.
 			$miniatura = $producto->get_image(
-				'thumbnail',
+				'woocommerce_thumbnail',
 				array(
 					'class'   => 'cj-prod__img',
 					'loading' => 'lazy',

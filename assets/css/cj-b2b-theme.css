@@ -698,21 +698,21 @@ fieldset.cj-campo {
 		overflow: visible;
 	}
 
-	.cj-tabla {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-tabla {
 		display: table;
 		border: 1px solid var(--cj-border);
 		background: var(--cj-bg-surface);
 	}
 
-	.cj-tabla thead {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-tabla thead {
 		display: table-header-group;
 	}
 
-	.cj-tabla tbody {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-tabla tbody {
 		display: table-row-group;
 	}
 
-	.cj-tabla tr {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-tabla tr {
 		display: table-row;
 		margin: 0;
 		padding: 0;
@@ -721,7 +721,7 @@ fieldset.cj-campo {
 		border-radius: 0;
 	}
 
-	.cj-tabla th {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-tabla th {
 		position: sticky;
 		top: 0;
 		z-index: 2;
@@ -736,74 +736,74 @@ fieldset.cj-campo {
 		white-space: nowrap;
 	}
 
-	.cj-tabla td,
-	.cj-col-codigo,
-	.cj-col-accion {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-tabla td,
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-col-codigo,
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-col-accion {
 		display: table-cell !important;
 		padding: 7px 10px;
 		border-top: 1px solid var(--cj-border);
 		vertical-align: middle;
 	}
 
-	.cj-tabla td[data-label]::before {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-tabla td[data-label]::before {
 		display: none;
 	}
 
-	.cj-tabla tbody tr:nth-child(even) {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-tabla tbody tr:nth-child(even) {
 		background: var(--cj-bg-stripe);
 	}
 
-	.cj-tabla tbody tr:hover {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-tabla tbody tr:hover {
 		background: var(--cj-bg-primary);
 	}
 
-	.cj-col-codigo .cj-code,
-	.cj-col-codigo .cj-sku {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-col-codigo .cj-code,
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-col-codigo .cj-sku {
 		display: block;
 	}
 
-	.cj-col-codigo .cj-code {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-col-codigo .cj-code {
 		font-size: 15px;
 	}
 
-	.cj-col-peso,
-	.cj-col-precio {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-col-peso,
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-col-precio {
 		white-space: nowrap;
 	}
 
-	.cj-col-precio,
-	.cj-tabla th.cj-th-precio {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-col-precio,
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-tabla th.cj-th-precio {
 		text-align: right;
 	}
 
-	.cj-col-acabado {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-col-acabado {
 		width: 200px;
 	}
 
-	.cj-col-accion {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-col-accion {
 		width: 1%;
 		white-space: nowrap;
 	}
 
-	.cj-col-accion > * {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-col-accion > * {
 		vertical-align: middle;
 	}
 
-	.cj-b2b .cj-col-accion input[type="number"] {
+	.cj-b2b .cj-catalogo:not(.cj-catalogo--grilla) .cj-col-accion input[type="number"] {
 		display: inline-block;
 		width: 64px;
 		margin-right: 6px;
 	}
 
-	.cj-col-accion .cj-btn {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-col-accion .cj-btn {
 		display: inline-flex;
 	}
 
-	.cj-precio {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-precio {
 		font-size: 15px;
 	}
 
-	.cj-fila-vacia td {
+	.cj-catalogo:not(.cj-catalogo--grilla) .cj-fila-vacia td {
 		display: table-cell !important;
 		padding: 24px;
 	}
@@ -1561,8 +1561,8 @@ fieldset.cj-campo {
 .cj-prod__thumb {
 	flex: none;
 	display: block;
-	width: 56px;
-	height: 56px;
+	width: 72px;
+	height: 72px;
 	border: 1px solid var(--cj-border);
 	border-radius: var(--cj-radius);
 	background: var(--cj-bg-surface);
@@ -1755,4 +1755,88 @@ fieldset.cj-campo {
 	.cj-pie__interior {
 		grid-template-columns: 1.4fr 1fr 1fr 1fr;
 	}
+}
+
+/* ------------------------------------- Catálogo: selector de vista */
+
+.cj-catalogo__resumen {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 6px 12px;
+}
+
+.cj-vista {
+	display: flex;
+	gap: 6px;
+}
+
+.cj-vista .cj-chip {
+	min-height: 32px;
+	padding: 4px 10px;
+	font-size: 13px;
+}
+
+/* --------------------------- Catálogo: vista en cuadrícula (foto grande) */
+
+/* Cada fila sigue siendo la tarjeta del diseño móvil; acá se acomodan en
+   columnas y la foto pasa a ocupar el ancho de la tarjeta. */
+
+.cj-catalogo--grilla .cj-tabla tbody {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+	gap: 12px;
+}
+
+.cj-catalogo--grilla .cj-tabla tr {
+	align-content: start;
+	margin: 0;
+	padding: 12px;
+}
+
+.cj-catalogo--grilla .cj-tabla tr.cj-fila-vacia {
+	grid-column: 1 / -1;
+}
+
+.cj-catalogo--grilla .cj-col-nombre {
+	order: -1;
+}
+
+.cj-catalogo--grilla .cj-prod {
+	flex-direction: column;
+	align-items: stretch;
+}
+
+.cj-catalogo--grilla .cj-prod__thumb {
+	width: 100%;
+	height: auto;
+	aspect-ratio: 1;
+}
+
+.cj-catalogo--grilla .cj-col-precio {
+	grid-column: 1 / -1;
+}
+
+.cj-catalogo--grilla .cj-col-accion {
+	align-self: end;
+}
+
+/* --------------------------------------------- Carrito: vaciar pedido */
+
+.woocommerce-cart a.button.cj-vaciar-pedido {
+	display: inline-block;
+	margin-left: 8px;
+	padding: 10px 16px;
+	border-radius: var(--cj-radius);
+	font-weight: 600;
+	text-decoration: none;
+	border: 1px solid var(--cj-border);
+	background: var(--cj-bg-surface);
+	color: var(--cj-error);
+}
+
+.woocommerce-cart a.button.cj-vaciar-pedido:hover,
+.woocommerce-cart a.button.cj-vaciar-pedido:focus-visible {
+	border-color: var(--cj-error);
 }
