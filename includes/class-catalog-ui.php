@@ -341,11 +341,14 @@ class CJB2B_Catalog_UI {
 		$args = array(
 			'post_type'      => 'product',
 			'post_status'    => 'publish',
-			'posts_per_page' => max( 6, (int) CJB2B_Frontend::ajuste( 'por_pagina' ) ),
-			'paged'          => max( 1, $pagina ),
-			'orderby'        => 'title',
+			// Se traen todos los IDs del filtro: el orden por código de matriz es
+			// "natural" (17, 22, 100, 188B, 6200...) y SQL no lo resuelve; se
+			// ordena y se pagina en PHP (el catálogo tiene unos cientos de productos).
+			'posts_per_page' => -1,
+			'orderby'        => 'ID',
 			'order'          => 'ASC',
 			'fields'         => 'ids',
+			'no_found_rows'  => true,
 			'tax_query'      => array(
 				'relation' => 'AND',
 				array(
@@ -381,13 +384,62 @@ class CJB2B_Catalog_UI {
 			$args['post__in'] = $ids;
 		}
 
-		$consulta = new WP_Query( $args );
+		$consulta   = new WP_Query( $args );
+		$ids        = $this->ordenar_por_codigo( array_map( 'intval', $consulta->posts ) );
+		$por_pagina = max( 6, (int) CJB2B_Frontend::ajuste( 'por_pagina' ) );
+		$total      = count( $ids );
 
 		return array(
-			'ids'     => array_map( 'intval', $consulta->posts ),
-			'total'   => (int) $consulta->found_posts,
-			'paginas' => (int) $consulta->max_num_pages,
+			'ids'     => array_slice( $ids, ( max( 1, $pagina ) - 1 ) * $por_pagina, $por_pagina ),
+			'total'   => $total,
+			'paginas' => (int) ceil( $total / $por_pagina ),
 		);
+	}
+
+	/**
+	 * Ordena productos por código de matriz (o SKU si no tiene) en orden
+	 * natural: primero los numéricos de menor a mayor (17, 22, 100, 188B,
+	 * 6200, 6201...) y después los que empiezan con letras (MP R25, NL-012...).
+	 *
+	 * @param int[] $ids
+	 * @return int[]
+	 */
+	private function ordenar_por_codigo( array $ids ): array {
+		if ( count( $ids ) < 2 ) {
+			return $ids;
+		}
+
+		update_meta_cache( 'post', $ids );
+
+		$claves = array();
+
+		foreach ( $ids as $id ) {
+			$codigo = CJB2B_Product_Fields::codigo_matriz( $id );
+
+			if ( '' === $codigo ) {
+				$codigo = (string) get_post_meta( $id, '_sku', true );
+			}
+
+			$claves[ $id ] = $codigo;
+		}
+
+		usort(
+			$ids,
+			static function ( int $a, int $b ) use ( $claves ): int {
+				$num_a = ctype_digit( substr( $claves[ $a ], 0, 1 ) );
+				$num_b = ctype_digit( substr( $claves[ $b ], 0, 1 ) );
+
+				if ( $num_a !== $num_b ) {
+					return $num_a ? -1 : 1;
+				}
+
+				$orden = strnatcasecmp( $claves[ $a ], $claves[ $b ] );
+
+				return 0 !== $orden ? $orden : $a <=> $b;
+			}
+		);
+
+		return $ids;
 	}
 
 	/**
