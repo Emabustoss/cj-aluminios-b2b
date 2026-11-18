@@ -54,6 +54,7 @@ final class CJ_Aluminios_B2B {
 
 		// Presupuestos web con numeración propia (WEB-00001).
 		require_once CJB2B_PATH . 'includes/class-presupuestos-web.php';
+		require_once CJB2B_PATH . 'includes/class-cart-acabado.php';
 	}
 
 	public function init(): void {
@@ -78,6 +79,7 @@ final class CJ_Aluminios_B2B {
 
 		CJB2B_Site_Navigation::instance();
 		CJB2B_Presupuestos_Web::instance();
+		CJB2B_Cart_Acabado::instance();
 	}
 
 	public function aviso_falta_woocommerce(): void {
