@@ -1894,3 +1894,29 @@ fieldset.cj-campo {
 		grid-template-columns: 1fr 1fr;
 	}
 }
+
+/* ------------------------------------------- Carrito: cambiar acabado */
+
+.cj-carrito-acabado {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 8px;
+	margin: 6px 0 0;
+	font-size: 13px;
+}
+
+.cj-carrito-acabado label {
+	font-weight: 700;
+}
+
+.cj-carrito-acabado select {
+	max-width: 100%;
+	min-height: 36px;
+	padding: 4px 8px;
+	border: 1px solid var(--cj-border);
+	border-radius: var(--cj-radius);
+	background: var(--cj-bg-surface);
+	color: var(--cj-text-primary);
+	font: inherit;
+}

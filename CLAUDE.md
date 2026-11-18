@@ -36,7 +36,8 @@ cj-aluminios-b2b/
     ├── class-simulador-2d.php        (Fase 3: [cj_simulador_2d] y cotización; la foto se procesa en el navegador)
     ├── class-institutional-pages.php (Fase 3: [cj_home_b2b], [cj_alta_b2b], páginas y menú)
     ├── class-site-navigation.php     (Fase 4: barra de cuenta con rol B2B, pie [cj_footer_b2b], lista única de enlaces)
-    └── class-presupuestos-web.php    (v1.4: presupuestos WEB-00001, comprobante réplica de OLF, Mi cuenta y admin)
+    ├── class-presupuestos-web.php    (v1.4: presupuestos WEB-00001, comprobante réplica de OLF, Mi cuenta y admin)
+    └── class-cart-acabado.php        (cambiar el color de un perfil desde el carrito)
 assets/
 ├── css/cj-b2b-theme.css              (paleta en variables :root, mobile-first)
 ├── js/cj-b2b-catalog.js, cj-b2b-whatsapp.js, cj-simulador-2d.js, cj-b2b-alta.js
@@ -59,6 +60,7 @@ Catalogos_pdf/                        (PDF del fabricante; no versionado, ver .g
 - **Datos fiscales:** el formulario del carrito pide CUIT/DNI, localidad y condición frente al IVA (meta `cjb2b_condicion_iva`), los precarga del perfil y los guarda en el perfil del usuario logueado.
 - **Pantallas:** Mi cuenta → "Mis Presupuestos Web" (endpoint `presupuestos-web`); admin → CJ Aluminios B2B → Presupuestos Web (búsqueda por número, cliente o CUIT; cambio de estado; ver/PDF; datos del emisor del encabezado, opción `cjb2b_emisor`).
 - **WhatsApp destino:** el mismo número de siempre, en CJ Aluminios B2B → Catálogo y WhatsApp.
+- **Cambiar color en el carrito:** cada perfil tiene un selector con los 9 acabados y su precio por barra (los de precio 0 salen "consultar" y deshabilitados). Al cambiarlo, el JS aprieta "Actualizar carrito" y `CJB2B_Cart_Acabado::aplicar_cambios()` reemplaza la variación conservando cantidad y posición (el nonce lo valida WooCommerce). Solo acepta variaciones del mismo producto, publicadas y con precio.
 - **Stock:** WooCommerce tiene el control de stock global apagado (`woocommerce_manage_stock = no`) y todos los productos en `manage_stock = no` / `instock`. La disponibilidad se confirma por WhatsApp.
 
 ### CSV de OLF (`scripts/generar_csv_cjmet.py`)
