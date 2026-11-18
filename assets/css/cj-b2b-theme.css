@@ -1920,3 +1920,40 @@ fieldset.cj-campo {
 	color: var(--cj-text-primary);
 	font: inherit;
 }
+
+.cj-carrito-todos {
+	margin: 0 0 12px;
+	padding: 10px 12px;
+	border: 1px solid var(--cj-border);
+	border-radius: var(--cj-radius);
+	background: var(--cj-bg-primary);
+	font-size: 14px;
+}
+
+.cj-carrito-todos label {
+	display: block;
+	margin-bottom: 6px;
+	font-weight: 700;
+}
+
+.cj-carrito-todos__fila {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.cj-carrito-todos select {
+	flex: 1 1 200px;
+	min-height: 40px;
+	padding: 4px 8px;
+	border: 1px solid var(--cj-border);
+	border-radius: var(--cj-radius);
+	background: var(--cj-bg-surface);
+	color: var(--cj-text-primary);
+	font: inherit;
+}
+
+.cj-carrito-todos .cj-btn[disabled] {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
